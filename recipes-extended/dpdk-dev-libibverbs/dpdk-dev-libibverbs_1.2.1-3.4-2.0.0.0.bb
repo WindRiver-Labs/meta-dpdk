@@ -24,4 +24,6 @@ S = "${WORKDIR}/${PN}-libibverbs-${PV}"
 COMPATIBLE_HOST = '(i.86|x86_64).*-linux'
 DEPENDS = "libnl"
 
+RPROVIDES_${PN} = "libibverbs1"
+
 inherit pkgconfig autotools
