@@ -1,7 +1,5 @@
 DESCRIPTION = "Intel(r) Data Plane Development Kit"
 HOMEPAGE = "http://dpdk.org"
-LICENSE = "BSD & LGPLv2 & GPLv2"
-LIC_FILES_CHKSUM = "file://LICENSE.GPL;md5=751419260aa954499f7abaabaa882bbe"
 
 SRC_URI = "http://fast.dpdk.org/rel/${BP}.tar.gz;name=dpdk \
 	   file://dpdk-16.04-add-RTE_KERNELDIR_OUT-to-split-kernel-bu.patch \
