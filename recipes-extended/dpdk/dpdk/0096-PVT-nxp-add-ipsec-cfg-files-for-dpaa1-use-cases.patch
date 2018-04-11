@@ -1,0 +1,368 @@
+From 451c8f74d05497bcd535941c2bd366e953acbb91 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Fri, 19 Jan 2018 00:57:40 +0530
+Subject: [PATCH 096/166] PVT: nxp: add ipsec cfg files for dpaa1 use-cases
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ nxp/ipsec/ep0_proto_ls1043.cfg     | 62 ++++++++++++++++++++++++++++++++++++++
+ nxp/ipsec/ep0_proto_ls1043_4g.cfg  | 48 +++++++++++++++++++++++++++++
+ nxp/ipsec/ep0_proto_ls1046_20g.cfg | 48 +++++++++++++++++++++++++++++
+ nxp/ipsec/ep1_proto_ls1043.cfg     | 60 ++++++++++++++++++++++++++++++++++++
+ nxp/ipsec/ep1_proto_ls1043_4g.cfg  | 46 ++++++++++++++++++++++++++++
+ nxp/ipsec/ep1_proto_ls1046_20g.cfg | 44 +++++++++++++++++++++++++++
+ 6 files changed, 308 insertions(+)
+ create mode 100644 nxp/ipsec/ep0_proto_ls1043.cfg
+ create mode 100644 nxp/ipsec/ep0_proto_ls1043_4g.cfg
+ create mode 100644 nxp/ipsec/ep0_proto_ls1046_20g.cfg
+ create mode 100644 nxp/ipsec/ep1_proto_ls1043.cfg
+ create mode 100644 nxp/ipsec/ep1_proto_ls1043_4g.cfg
+ create mode 100644 nxp/ipsec/ep1_proto_ls1046_20g.cfg
+
+diff --git a/nxp/ipsec/ep0_proto_ls1043.cfg b/nxp/ipsec/ep0_proto_ls1043.cfg
+new file mode 100644
+index 000000000000..c2090d2a3274
+--- /dev/null
++++ b/nxp/ipsec/ep0_proto_ls1043.cfg
+@@ -0,0 +1,62 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint 0 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep0.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 out esp protect 5 pri 1 dst 192.168.105.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 7 pri 1 dst 192.168.107.0/24 sport 0:65535 dport 0:65535
++
++sp ipv4 in esp protect 105 pri 1 dst 192.168.115.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 107 pri 1 dst 192.168.117.0/24 sport 0:65535 dport 0:65535
++
++#SP IPv6 rules
++
++#SA rules
++sa out 5 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.5 dst 172.16.2.5 \
++type lookaside-protocol-offload port_id 3
++
++sa out 6 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 3
++
++sa out 7 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.7 dst 172.16.2.7 \
++type lookaside-protocol-offload port_id 3
++
++sa in 105 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.5 dst 172.16.1.5 \
++type lookaside-protocol-offload port_id 2
++
++sa in 106 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 2
++
++sa in 107 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.7 dst 172.16.1.7 \
++type lookaside-protocol-offload port_id 2
++
++#Routing rules
++rt ipv4 dst 172.16.2.5/32 port 6
++rt ipv4 dst 172.16.2.6/32 port 6
++rt ipv4 dst 172.16.2.7/32 port 6
++rt ipv4 dst 192.168.115.0/24 port 0
++rt ipv4 dst 192.168.116.0/24 port 1
++rt ipv4 dst 192.168.117.0/24 port 2
++
+diff --git a/nxp/ipsec/ep0_proto_ls1043_4g.cfg b/nxp/ipsec/ep0_proto_ls1043_4g.cfg
+new file mode 100644
+index 000000000000..a33ed31db636
+--- /dev/null
++++ b/nxp/ipsec/ep0_proto_ls1043_4g.cfg
+@@ -0,0 +1,48 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint 0 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep0.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 out esp protect 5 pri 1 dst 192.168.105.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++
++sp ipv4 in esp protect 105 pri 1 dst 192.168.115.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++
++#SP IPv6 rules
++
++#SA rules
++sa out 5 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.5 dst 172.16.2.5 \
++type lookaside-protocol-offload port_id 0
++
++sa out 6 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 2
++
++sa in 105 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.5 dst 172.16.1.5 \
++type lookaside-protocol-offload port_id 1
++
++sa in 106 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 3
++
++#Routing rules
++rt ipv4 dst 172.16.2.5/32 port 1
++rt ipv4 dst 172.16.2.6/32 port 5
++rt ipv4 dst 192.168.115.0/24 port 0
++rt ipv4 dst 192.168.116.0/24 port 4
++
+diff --git a/nxp/ipsec/ep0_proto_ls1046_20g.cfg b/nxp/ipsec/ep0_proto_ls1046_20g.cfg
+new file mode 100644
+index 000000000000..ab5f49f05779
+--- /dev/null
++++ b/nxp/ipsec/ep0_proto_ls1046_20g.cfg
+@@ -0,0 +1,48 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint 0 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep0.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 out esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 7 pri 1 dst 192.168.107.0/24 sport 0:65535 dport 0:65535
++
++sp ipv4 in esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 107 pri 1 dst 192.168.117.0/24 sport 0:65535 dport 0:65535
++
++#SP IPv6 rules
++
++#SA rules
++sa out 6 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 2
++
++sa out 7 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.7 dst 172.16.2.7 \
++type lookaside-protocol-offload port_id 3
++
++sa in 106 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 0
++
++sa in 107 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.7 dst 172.16.1.7 \
++type lookaside-protocol-offload port_id 1
++
++#Routing rules
++rt ipv4 dst 172.16.2.6/32 port 4
++rt ipv4 dst 172.16.2.7/32 port 4
++rt ipv4 dst 192.168.116.0/24 port 5
++rt ipv4 dst 192.168.117.0/24 port 5
++
+diff --git a/nxp/ipsec/ep1_proto_ls1043.cfg b/nxp/ipsec/ep1_proto_ls1043.cfg
+new file mode 100644
+index 000000000000..86fbc6087a33
+--- /dev/null
++++ b/nxp/ipsec/ep1_proto_ls1043.cfg
+@@ -0,0 +1,60 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint1 sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint1 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep1.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 in esp protect 5 pri 1 dst 192.168.105.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 7 pri 1 dst 192.168.107.0/24 sport 0:65535 dport 0:65535
++
++sp ipv4 out esp protect 105 pri 1 dst 192.168.115.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 107 pri 1 dst 192.168.117.0/24 sport 0:65535 dport 0:65535
++
++#SA rules
++sa in 5 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.5 dst 172.16.2.5 \
++type lookaside-protocol-offload port_id 2
++
++sa in 6 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 2
++
++sa in 7 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.7 dst 172.16.2.7 \
++type lookaside-protocol-offload port_id 2
++
++sa out 105 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.5 dst 172.16.1.5 \
++type lookaside-protocol-offload port_id 3
++
++sa out 106 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 3
++
++sa out 107 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.7 dst 172.16.1.7 \
++type lookaside-protocol-offload port_id 3
++
++#Routing rules
++rt ipv4 dst 172.16.1.5/32 port 6
++rt ipv4 dst 172.16.1.6/32 port 6
++rt ipv4 dst 172.16.1.7/32 port 6
++rt ipv4 dst 192.168.105.0/24 port 0
++rt ipv4 dst 192.168.106.0/24 port 1
++rt ipv4 dst 192.168.107.0/24 port 2
++
+diff --git a/nxp/ipsec/ep1_proto_ls1043_4g.cfg b/nxp/ipsec/ep1_proto_ls1043_4g.cfg
+new file mode 100644
+index 000000000000..16757d72b63f
+--- /dev/null
++++ b/nxp/ipsec/ep1_proto_ls1043_4g.cfg
+@@ -0,0 +1,46 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint1 sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint1 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep1.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 in esp protect 5 pri 1 dst 192.168.105.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++
++sp ipv4 out esp protect 105 pri 1 dst 192.168.115.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++
++#SA rules
++sa in 5 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.5 dst 172.16.2.5 \
++type lookaside-protocol-offload port_id 1
++
++sa in 6 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 3
++
++sa out 105 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.5 dst 172.16.1.5 \
++type lookaside-protocol-offload port_id 0
++
++sa out 106 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 2
++
++#Routing rules
++rt ipv4 dst 172.16.1.5/32 port 1
++rt ipv4 dst 172.16.1.6/32 port 5
++rt ipv4 dst 192.168.105.0/24 port 0
++rt ipv4 dst 192.168.106.0/24 port 4
++
+diff --git a/nxp/ipsec/ep1_proto_ls1046_20g.cfg b/nxp/ipsec/ep1_proto_ls1046_20g.cfg
+new file mode 100644
+index 000000000000..f76e72985f8f
+--- /dev/null
++++ b/nxp/ipsec/ep1_proto_ls1046_20g.cfg
+@@ -0,0 +1,44 @@
++###########################################################################
++#   IPSEC-SECGW Endpoint1 sample configuration
++#
++#   The main purpose of this file is to show how to configure two systems
++#   back-to-back that would forward traffic through an IPsec tunnel. This
++#   file is the Endpoint1 configuration. To use this configuration file,
++#   add the following command-line option:
++#
++#       -f ./ep1.cfg
++#
++###########################################################################
++
++#SP IPv4 rules
++sp ipv4 in esp protect 6 pri 1 dst 192.168.106.0/24 sport 0:65535 dport 0:65535
++sp ipv4 in esp protect 7 pri 1 dst 192.168.107.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 106 pri 1 dst 192.168.116.0/24 sport 0:65535 dport 0:65535
++sp ipv4 out esp protect 107 pri 1 dst 192.168.117.0/24 sport 0:65535 dport 0:65535
++#SA rules
++sa in 6 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.1.6 dst 172.16.2.6 \
++type lookaside-protocol-offload port_id 0
++
++sa in 7 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.1.7 dst 172.16.2.7 \
++type lookaside-protocol-offload port_id 1
++
++sa out 106 cipher_algo aes-128-cbc cipher_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++auth_algo sha1-hmac auth_key 0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0 \
++mode ipv4-tunnel src 172.16.2.6 dst 172.16.1.6 \
++type lookaside-protocol-offload port_id 2
++
++sa out 107 cipher_algo aes-128-cbc cipher_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0 auth_algo sha1-hmac auth_key a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:a0:\
++a0:a0:a0:a0:a0:a0:a0:a0:a0 mode ipv4-tunnel src 172.16.2.7 dst 172.16.1.7 \
++type lookaside-protocol-offload port_id 3
++
++#Routing rules
++rt ipv4 dst 172.16.1.6/32 port 4
++rt ipv4 dst 172.16.1.7/32 port 4
++rt ipv4 dst 192.168.106.0/24 port 5
++rt ipv4 dst 192.168.107.0/24 port 5
++
+-- 
+2.14.3
+

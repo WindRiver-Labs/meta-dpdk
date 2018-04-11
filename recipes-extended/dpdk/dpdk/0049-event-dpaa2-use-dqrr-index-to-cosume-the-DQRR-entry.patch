@@ -1,0 +1,27 @@
+From 5161b3cd3976d3793923f4fed33beb5e1402b6d9 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Thu, 4 Jan 2018 18:39:43 +0530
+Subject: [PATCH 049/166] event/dpaa2: use dqrr index to cosume the DQRR entry
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/event/dpaa2/dpaa2_eventdev.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index c6dc5a273708..23727f0b3256 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -263,8 +263,7 @@ dpaa2_eventdev_dequeue_burst(void *port, struct rte_event ev[],
+ 	/* Check if there are atomic contexts to be released */
+ 	while (DPAA2_PER_LCORE_DPIO->dqrr_size) {
+ 		if (DPAA2_PER_LCORE_DPIO->dqrr_held & (1 << i)) {
+-			dq = qbman_get_dqrr_from_idx(swp, i);
+-			qbman_swp_dqrr_consume(swp, dq);
++			qbman_swp_dqrr_idx_consume(swp, i);
+ 			DPAA2_PER_LCORE_DPIO->dqrr_size--;
+ 		}
+ 		i++;
+-- 
+2.14.3
+

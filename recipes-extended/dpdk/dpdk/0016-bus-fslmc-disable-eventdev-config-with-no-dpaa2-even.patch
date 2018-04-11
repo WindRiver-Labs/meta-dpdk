@@ -1,0 +1,47 @@
+From 1ffa699e459734b6ff8b77c5bddbc4496f1f3dba Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 12 Jan 2018 15:30:55 +0530
+Subject: [PATCH 016/166] bus/fslmc: disable eventdev config with no dpaa2
+ eventdev
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+index a98991a5fdb0..38abdd39e8c1 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+@@ -112,6 +112,7 @@ dpaa2_core_cluster_sdest(int cpu_id)
+ 	return dpaa2_core_cluster_base + x;
+ }
+ 
++#ifdef RTE_LIBRTE_PMD_DPAA2_EVENTDEV
+ static void dpaa2_affine_dpio_intr_to_respective_core(int32_t dpio_id)
+ {
+ #define STRING_LEN	28
+@@ -200,6 +201,7 @@ static int dpaa2_dpio_intr_init(struct dpaa2_dpio_dev *dpio_dev)
+ 
+ 	return 0;
+ }
++#endif
+ 
+ static int
+ configure_dpio_qbman_swp(struct dpaa2_dpio_dev *dpio_dev)
+@@ -292,10 +294,12 @@ dpaa2_configure_stashing(struct dpaa2_dpio_dev *dpio_dev, int cpu_id)
+ 		return -1;
+ 	}
+ 
++#ifdef RTE_LIBRTE_PMD_DPAA2_EVENTDEV
+ 	if (dpaa2_dpio_intr_init(dpio_dev)) {
+ 		PMD_DRV_LOG(ERR, "Interrupt registration failed for dpio\n");
+ 		return -1;
+ 	}
++#endif
+ 
+ 	return 0;
+ }
+-- 
+2.14.3
+

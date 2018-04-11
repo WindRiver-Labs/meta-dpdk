@@ -1,0 +1,329 @@
+From 5b0688dde3d7434394aa404e68745ff0c8a8aef9 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Thu, 15 Feb 2018 09:08:03 +0530
+Subject: [PATCH 133/166] PVT: raw/dpaa2_cmdif: introduce the DPAA2 command
+ interface driver
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ MAINTAINERS                                        |   6 +
+ config/common_base                                 |   5 +
+ config/defconfig_arm64-dpaa2-linuxapp-gcc          |   5 +
+ drivers/raw/Makefile                               |   1 +
+ drivers/raw/dpaa2_cmdif/Makefile                   |  32 +++++
+ drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c              | 139 +++++++++++++++++++++
+ drivers/raw/dpaa2_cmdif/dpaa2_cmdif_logs.h         |  35 ++++++
+ .../dpaa2_cmdif/rte_pmd_dpaa2_cmdif_version.map    |   4 +
+ mk/rte.app.mk                                      |   1 +
+ 9 files changed, 228 insertions(+)
+ create mode 100644 drivers/raw/dpaa2_cmdif/Makefile
+ create mode 100644 drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
+ create mode 100644 drivers/raw/dpaa2_cmdif/dpaa2_cmdif_logs.h
+ create mode 100644 drivers/raw/dpaa2_cmdif/rte_pmd_dpaa2_cmdif_version.map
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 072bbbed8954..09381599d98e 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -714,6 +714,12 @@ F: doc/guides/eventdevs/sw.rst
+ F: examples/eventdev_pipeline_sw_pmd/
+ F: doc/guides/sample_app_ug/eventdev_pipeline_sw_pmd.rst
+ 
++Rawdev Drivers
++--------------
++
++DPAA2 CMDIF
++M: Nipun Gupta <nipun.gupta@nxp.com>
++F: drivers/raw/dpaa2_cmdif/
+ 
+ Packet processing
+ -----------------
+diff --git a/config/common_base b/config/common_base
+index 68177407df16..734ca9d2ed1d 100644
+--- a/config/common_base
++++ b/config/common_base
+@@ -602,6 +602,11 @@ CONFIG_RTE_LIBRTE_RAWDEV=y
+ CONFIG_RTE_RAWDEV_MAX_DEVS=10
+ CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV=y
+ 
++#
++# Compile DPAA2 CMDIF support
++#
++CONFIG_RTE_LIBRTE_PMD_DPAA2_CMDIF=n
++
+ #
+ # Compile librte_ring
+ #
+diff --git a/config/defconfig_arm64-dpaa2-linuxapp-gcc b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+index 409d6b447b3d..6c6a912ea546 100644
+--- a/config/defconfig_arm64-dpaa2-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+@@ -92,3 +92,8 @@ CONFIG_RTE_DPAA2_SEC_PMD_MAX_NB_SESSIONS=2048
+ #
+ CONFIG_RTE_LIBRTE_PMD_DPAA2_EVENTDEV=y
+ CONFIG_RTE_LIBRTE_PMD_DPAA2_EVENTDEV_DEBUG=n
++
++#
++# Compile DPAA2 Command Intefrace driver
++#
++CONFIG_RTE_LIBRTE_PMD_DPAA2_CMDIF=y
+diff --git a/drivers/raw/Makefile b/drivers/raw/Makefile
+index da7c8b449cb6..129945bb1ac3 100644
+--- a/drivers/raw/Makefile
++++ b/drivers/raw/Makefile
+@@ -5,5 +5,6 @@ include $(RTE_SDK)/mk/rte.vars.mk
+ 
+ # DIRS-$(<configuration>) += <directory>
+ DIRS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV) += skeleton_rawdev
++DIRS-$(CONFIG_RTE_LIBRTE_PMD_DPAA2_CMDIF) += dpaa2_cmdif
+ 
+ include $(RTE_SDK)/mk/rte.subdir.mk
+diff --git a/drivers/raw/dpaa2_cmdif/Makefile b/drivers/raw/dpaa2_cmdif/Makefile
+new file mode 100644
+index 000000000000..b5c164bbfd24
+--- /dev/null
++++ b/drivers/raw/dpaa2_cmdif/Makefile
+@@ -0,0 +1,32 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2018 NXP
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++#
++# library name
++#
++LIB = librte_pmd_dpaa2_cmdif.a
++
++CFLAGS += -O3
++CFLAGS += $(WERROR_FLAGS)
++
++CFLAGS += -I$(RTE_SDK)/drivers/bus/fslmc
++CFLAGS += -I$(RTE_SDK)/drivers/bus/fslmc/qbman/include
++
++LDLIBS += -lrte_bus_fslmc
++LDLIBS += -lrte_eal
++LDLIBS += -lrte_rawdev
++LDLIBS += -lrte_bus_vdev
++LDLIBS += -lrte_kvargs
++
++EXPORT_MAP := rte_pmd_dpaa2_cmdif_version.map
++
++LIBABIVER := 1
++
++#
++# all source are stored in SRCS-y
++#
++SRCS-$(CONFIG_RTE_LIBRTE_PMD_DPAA2_CMDIF) += dpaa2_cmdif.c
++
++include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
+new file mode 100644
+index 000000000000..0d98d366be1d
+--- /dev/null
++++ b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
+@@ -0,0 +1,139 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2018 NXP
++ */
++
++#include <stdio.h>
++#include <errno.h>
++#include <stdint.h>
++
++#include <rte_bus_vdev.h>
++#include <rte_atomic.h>
++#include <rte_interrupts.h>
++#include <rte_branch_prediction.h>
++#include <rte_lcore.h>
++
++#include <rte_rawdev.h>
++#include <rte_rawdev_pmd.h>
++
++#include <portal/dpaa2_hw_pvt.h>
++#include <portal/dpaa2_hw_dpio.h>
++#include "rte_pmd_dpaa2_cmdif.h"
++#include "dpaa2_cmdif_logs.h"
++
++/* Dynamic log type identifier */
++int dpaa2_cmdif_logtype;
++
++/* CMDIF driver name */
++#define DPAA2_CMDIF_PMD_NAME dpaa2_dpci
++
++/* CMDIF driver object */
++static struct rte_vdev_driver dpaa2_cmdif_drv;
++
++static const struct rte_rawdev_ops dpaa2_cmdif_ops = {
++};
++
++static int
++dpaa2_cmdif_create(const char *name,
++		   struct rte_vdev_device *vdev,
++		   int socket_id)
++{
++	struct rte_rawdev *rawdev;
++	struct dpaa2_dpci_dev *cidev;
++
++	/* Allocate device structure */
++	rawdev = rte_rawdev_pmd_allocate(name, sizeof(struct dpaa2_dpci_dev),
++					 socket_id);
++	if (!rawdev) {
++		DPAA2_CMDIF_ERR("Unable to allocate rawdevice");
++		return -EINVAL;
++	}
++
++	rawdev->dev_ops = &dpaa2_cmdif_ops;
++	rawdev->device = &vdev->device;
++	rawdev->driver_name = vdev->device.driver->name;
++
++	/* For secondary processes, the primary has done all the work */
++	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
++		return 0;
++
++	cidev = rte_dpaa2_alloc_dpci_dev();
++	if (!cidev) {
++		DPAA2_CMDIF_ERR("Unable to allocate CI device");
++		rte_rawdev_pmd_release(rawdev);
++		return -ENODEV;
++	}
++
++	rawdev->dev_private = cidev;
++
++	return 0;
++}
++
++static int
++dpaa2_cmdif_destroy(const char *name)
++{
++	int ret;
++	struct rte_rawdev *rdev;
++
++	rdev = rte_rawdev_pmd_get_named_dev(name);
++	if (!rdev) {
++		DPAA2_CMDIF_ERR("Invalid device name (%s)", name);
++		return -EINVAL;
++	}
++
++	/* The primary process will only free the DPCI device */
++	if (rte_eal_process_type() == RTE_PROC_PRIMARY)
++		rte_dpaa2_free_dpci_dev(rdev->dev_private);
++
++	ret = rte_rawdev_pmd_release(rdev);
++	if (ret)
++		DPAA2_CMDIF_DEBUG("Device cleanup failed");
++
++	return 0;
++}
++
++static int
++dpaa2_cmdif_probe(struct rte_vdev_device *vdev)
++{
++	const char *name;
++	int ret = 0;
++
++	name = rte_vdev_device_name(vdev);
++
++	DPAA2_CMDIF_INFO("Init %s on NUMA node %d", name, rte_socket_id());
++
++	ret = dpaa2_cmdif_create(name, vdev, rte_socket_id());
++
++	return ret;
++}
++
++static int
++dpaa2_cmdif_remove(struct rte_vdev_device *vdev)
++{
++	const char *name;
++	int ret;
++
++	name = rte_vdev_device_name(vdev);
++
++	DPAA2_CMDIF_INFO("Closing %s on NUMA node %d", name, rte_socket_id());
++
++	ret = dpaa2_cmdif_destroy(name);
++
++	return ret;
++}
++
++static struct rte_vdev_driver dpaa2_cmdif_drv = {
++	.probe = dpaa2_cmdif_probe,
++	.remove = dpaa2_cmdif_remove
++};
++
++RTE_PMD_REGISTER_VDEV(DPAA2_CMDIF_PMD_NAME, dpaa2_cmdif_drv);
++
++RTE_INIT(dpaa2_cmdif_init_log);
++
++static void
++dpaa2_cmdif_init_log(void)
++{
++	dpaa2_cmdif_logtype = rte_log_register("dpaa2.cmdif");
++	if (dpaa2_cmdif_logtype >= 0)
++		rte_log_set_level(dpaa2_cmdif_logtype, RTE_LOG_INFO);
++}
+diff --git a/drivers/raw/dpaa2_cmdif/dpaa2_cmdif_logs.h b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif_logs.h
+new file mode 100644
+index 000000000000..5eb088548e91
+--- /dev/null
++++ b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif_logs.h
+@@ -0,0 +1,35 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2018 NXP
++ */
++
++#ifndef __DPAA2_CMDIF_LOGS_H__
++#define __DPAA2_CMDIF_LOGS_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <rte_rawdev.h>
++
++extern int dpaa2_cmdif_logtype;
++
++#define DPAA2_CMDIF_LOG(level, fmt, args...) \
++	rte_log(RTE_LOG_ ## level, dpaa2_cmdif_logtype, "%s(): " fmt "\n", \
++		__func__, ##args)
++
++#define DPAA2_CMDIF_FUNC_TRACE() DPAA2_CMDIF_LOG(DEBUG, ">>")
++
++#define DPAA2_CMDIF_DEBUG(fmt, args...) \
++	DPAA2_CMDIF_LOG(DEBUG, fmt, ## args)
++#define DPAA2_CMDIF_INFO(fmt, args...) \
++	DPAA2_CMDIF_LOG(INFO, fmt, ## args)
++#define DPAA2_CMDIF_ERR(fmt, args...) \
++	DPAA2_CMDIF_LOG(ERR, fmt, ## args)
++#define DPAA2_CMDIF_WARN(fmt, args...) \
++	DPAA2_CMDIF_LOG(WARNING, fmt, ## args)
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __DPAA2_CMDIF_LOGS_H__ */
+diff --git a/drivers/raw/dpaa2_cmdif/rte_pmd_dpaa2_cmdif_version.map b/drivers/raw/dpaa2_cmdif/rte_pmd_dpaa2_cmdif_version.map
+new file mode 100644
+index 000000000000..9b9ab1a4cfb5
+--- /dev/null
++++ b/drivers/raw/dpaa2_cmdif/rte_pmd_dpaa2_cmdif_version.map
+@@ -0,0 +1,4 @@
++DPDK_18.05 {
++
++	local: *;
++};
+diff --git a/mk/rte.app.mk b/mk/rte.app.mk
+index 5edf886c3e6e..d44aa6496b04 100644
+--- a/mk/rte.app.mk
++++ b/mk/rte.app.mk
+@@ -206,6 +206,7 @@ endif # CONFIG_RTE_LIBRTE_EVENTDEV
+ 
+ ifeq ($(CONFIG_RTE_LIBRTE_RAWDEV),y)
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV) += -lrte_pmd_skeleton_rawdev
++_LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_DPAA2_CMDIF) += -lrte_pmd_dpaa2_cmdif
+ endif # CONFIG_RTE_LIBRTE_RAWDEV
+ 
+ ifeq ($(CONFIG_RTE_LIBRTE_DPAA2_PMD),y)
+-- 
+2.14.3
+

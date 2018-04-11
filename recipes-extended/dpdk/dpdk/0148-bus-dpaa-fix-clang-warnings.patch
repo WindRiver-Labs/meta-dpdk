@@ -1,0 +1,81 @@
+From af8462115f87fc5186494d8cdf0fbf57bc994bf2 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 25 Jan 2018 15:23:27 +0530
+Subject: [PATCH 148/166] bus/dpaa: fix clang warnings
+
+fman.c:570:15: error: format specifies type 'unsigned short'
+but the argument has type 'int'
+
+fman/netcfg_layer.c:80:1: error: unused function 'get_num_netcfg_interfaces'
+
+Fixes: 919eeaccb2ba ("bus/dpaa: introduce NXP DPAA bus driver skeleton")
+Fixes: 5b22cf744689 ("bus/dpaa: introducing FMan configurations")
+Cc: stable@dpdk.org
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/fman/fman.c         |  2 +-
+ drivers/bus/dpaa/base/fman/netcfg_layer.c | 16 ----------------
+ drivers/bus/dpaa/dpaa_bus.c               |  6 ------
+ 3 files changed, 1 insertion(+), 23 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/fman/fman.c b/drivers/bus/dpaa/base/fman/fman.c
+index e67ee41368aa..5aabfdef0aa2 100644
+--- a/drivers/bus/dpaa/base/fman/fman.c
++++ b/drivers/bus/dpaa/base/fman/fman.c
+@@ -599,7 +599,7 @@ fman_finish(void)
+ 		/* release the mapping */
+ 		_errno = munmap(__if->ccsr_map, __if->regs_size);
+ 		if (unlikely(_errno < 0))
+-			fprintf(stderr, "%s:%hu:%s(): munmap() = %d (%s)\n",
++			fprintf(stderr, "%s:%d:%s(): munmap() = %d (%s)\n",
+ 				__FILE__, __LINE__, __func__,
+ 				-errno, strerror(errno));
+ 		printf("Tearing down %s\n", __if->node_path);
+diff --git a/drivers/bus/dpaa/base/fman/netcfg_layer.c b/drivers/bus/dpaa/base/fman/netcfg_layer.c
+index 2e00711d98cc..81a1f6f1c7ed 100644
+--- a/drivers/bus/dpaa/base/fman/netcfg_layer.c
++++ b/drivers/bus/dpaa/base/fman/netcfg_layer.c
+@@ -109,22 +109,6 @@ dump_netcfg(struct netcfg_info *cfg_ptr)
+ }
+ #endif /* RTE_LIBRTE_DPAA_DEBUG_DRIVER */
+ 
+-static inline int
+-get_num_netcfg_interfaces(char *str)
+-{
+-	char *pch;
+-	uint8_t count = 0;
+-
+-	if (str == NULL)
+-		return -EINVAL;
+-	pch = strtok(str, ",");
+-	while (pch != NULL) {
+-		count++;
+-		pch = strtok(NULL, ",");
+-	}
+-	return count;
+-}
+-
+ struct netcfg_info *
+ netcfg_acquire(void)
+ {
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index b09f98a7c076..7b85dc12c44f 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -138,12 +138,6 @@ dpaa_add_to_device_list(struct rte_dpaa_device *newdev)
+ 		TAILQ_INSERT_TAIL(&rte_dpaa_bus.device_list, newdev, next);
+ }
+ 
+-static inline void
+-dpaa_remove_from_device_list(struct rte_dpaa_device *dev)
+-{
+-	TAILQ_INSERT_TAIL(&rte_dpaa_bus.device_list, dev, next);
+-}
+-
+ /*
+  * Reads the SEC device from DTS
+  * Returns -1 if SEC devices not available, 0 otherwise
+-- 
+2.14.3
+

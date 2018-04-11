@@ -1,0 +1,115 @@
+From 891d6fe50bfa07b85a3782e04c02a925ba6bb216 Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Thu, 8 Mar 2018 16:05:42 +0530
+Subject: [PATCH 165/166] PVT: dpaa2: Coverity fixes
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+---
+ drivers/bus/fslmc/fslmc_bus.c               |  2 +-
+ drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c | 28 ++++++++++++++++++++++++----
+ 2 files changed, 25 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index 747ef79ad2dd..f97718e8a500 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -56,7 +56,7 @@ uint8_t dpaa2_virt_mode;
+ uint32_t
+ rte_fslmc_get_device_count(enum rte_dpaa2_dev_type device_type)
+ {
+-	if (device_type > DPAA2_DEVTYPE_MAX)
++	if (device_type >= DPAA2_DEVTYPE_MAX)
+ 		return 0;
+ 	return rte_fslmc_bus.device_count[device_type];
+ }
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+index 09bc54fe6e7a..442c948e1c8f 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+@@ -1647,7 +1647,7 @@ dpaa2_sec_auth_init(struct rte_cryptodev *dev,
+ {
+ 	struct dpaa2_sec_dev_private *dev_priv = dev->data->dev_private;
+ 	struct alginfo authdata;
+-	unsigned int bufsize, i;
++	int bufsize, i;
+ 	struct ctxt_priv *priv;
+ 	struct sec_flow_context *flc;
+ 
+@@ -1743,6 +1743,10 @@ dpaa2_sec_auth_init(struct rte_cryptodev *dev,
+ 	bufsize = cnstr_shdsc_hmac(priv->flc_desc[DESC_INITFINAL].desc,
+ 				   1, 0, &authdata, !session->dir,
+ 				   session->digest_length);
++	if (bufsize < 0) {
++		PMD_DRV_LOG(ERR, "Crypto: Invalid buffer lengths\n");
++		goto error_out;
++	}
+ 
+ 	flc->word1_sdl = (uint8_t)bufsize;
+ 	flc->word2_rflc_31_0 = lower_32_bits(
+@@ -1773,7 +1777,7 @@ dpaa2_sec_aead_init(struct rte_cryptodev *dev,
+ 	struct dpaa2_sec_aead_ctxt *ctxt = &session->ext_params.aead_ctxt;
+ 	struct dpaa2_sec_dev_private *dev_priv = dev->data->dev_private;
+ 	struct alginfo aeaddata;
+-	unsigned int bufsize, i;
++	int bufsize, i;
+ 	struct ctxt_priv *priv;
+ 	struct sec_flow_context *flc;
+ 	struct rte_crypto_aead_xform *aead_xform = &xform->aead;
+@@ -1864,6 +1868,11 @@ dpaa2_sec_aead_init(struct rte_cryptodev *dev,
+ 				priv->flc_desc[0].desc, 1, 0,
+ 				&aeaddata, session->iv.length,
+ 				session->digest_length);
++	if (bufsize < 0) {
++		PMD_DRV_LOG(ERR, "Crypto: Invalid buffer lengths\n");
++		goto error_out;
++	}
++
+ 	flc->word1_sdl = (uint8_t)bufsize;
+ 	flc->word2_rflc_31_0 = lower_32_bits(
+ 			(uint64_t)&(((struct dpaa2_sec_qp *)
+@@ -1893,7 +1902,7 @@ dpaa2_sec_aead_chain_init(struct rte_cryptodev *dev,
+ 	struct dpaa2_sec_aead_ctxt *ctxt = &session->ext_params.aead_ctxt;
+ 	struct dpaa2_sec_dev_private *dev_priv = dev->data->dev_private;
+ 	struct alginfo authdata, cipherdata;
+-	unsigned int bufsize, i;
++	int bufsize, i;
+ 	struct ctxt_priv *priv;
+ 	struct sec_flow_context *flc;
+ 	struct rte_crypto_cipher_xform *cipher_xform;
+@@ -2090,6 +2099,11 @@ dpaa2_sec_aead_chain_init(struct rte_cryptodev *dev,
+ 		goto error_out;
+ 	}
+ 
++        if (bufsize < 0) {
++                PMD_DRV_LOG(ERR, "Crypto: Invalid buffer lengths\n");
++                goto error_out;
++        }
++
+ 	flc->word1_sdl = (uint8_t)bufsize;
+ 	flc->word2_rflc_31_0 = lower_32_bits(
+ 			(uint64_t)&(((struct dpaa2_sec_qp *)
+@@ -2176,7 +2190,7 @@ dpaa2_sec_set_ipsec_session(struct rte_cryptodev *dev,
+ 	struct ipsec_encap_pdb encap_pdb;
+ 	struct ipsec_decap_pdb decap_pdb;
+ 	struct alginfo authdata, cipherdata;
+-	unsigned int bufsize;
++	int bufsize;
+ 	struct sec_flow_context *flc;
+ 
+ 	PMD_INIT_FUNC_TRACE();
+@@ -2366,6 +2380,12 @@ dpaa2_sec_set_ipsec_session(struct rte_cryptodev *dev,
+ 				1, 0, &decap_pdb, &cipherdata, &authdata);
+ 	} else
+ 		goto out;
++
++        if (bufsize < 0) {
++                PMD_DRV_LOG(ERR, "Crypto: Invalid buffer lengths\n");
++                goto out;
++        }
++
+ 	flc->word1_sdl = (uint8_t)bufsize;
+ 
+ 	/* Enable the stashing control bit */
+-- 
+2.14.3
+

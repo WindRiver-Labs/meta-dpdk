@@ -1,0 +1,130 @@
+From 5e05ae35b7b12810433778e3d42477dc807c61f2 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:25 +0530
+Subject: [PATCH 011/166] net/dpaa2: optimize Rx path packet parsing
+
+Parsing the annotation has multiple if checks in the data path.
+These are reduced for common cases like IPv4/IPv6 and UDP/TCP
+packets to enhance performance of these generic cases.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h | 20 +++++++++++++
+ drivers/net/dpaa2/dpaa2_rxtx.c               | 43 ++++++++++++++++++++++++----
+ 2 files changed, 58 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+index e68febff4d77..88a9d49040dd 100644
+--- a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
++++ b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+@@ -219,6 +219,26 @@ struct dpaa2_annot_hdr {
+ #define L5_SOFT_PARSING_ERROR			BIT_POS(1)
+ #define L3_IPV6_ROUTE_HDR_PRESENT		BIT_POS(0)
+ 
++#define DPAA2_L3_IPv4 (L3_IPV4_1_PRESENT | L3_IPV4_1_UNICAST | \
++	L3_IP_1_UNKNOWN_PROTOCOL | L3_IP_UNKNOWN_PROTOCOL)
++
++#define DPAA2_L3_IPv6 (L3_IPV6_1_PRESENT | L3_IPV6_1_UNICAST | \
++	L3_IP_1_UNKNOWN_PROTOCOL | L3_IP_UNKNOWN_PROTOCOL)
++
++#define DPAA2_L3_IPv4_TCP (L3_IPV4_1_PRESENT | L3_IPV4_1_UNICAST | \
++	L3_PROTO_TCP_PRESENT | L3_PROTO_TCP_CTRL_BIT_6_TO_11_PRESENT | \
++	L4_UNKNOWN_PROTOCOL)
++
++#define DPAA2_L3_IPv4_UDP (L3_IPV4_1_PRESENT | L3_IPV4_1_UNICAST | \
++	L3_PROTO_UDP_PRESENT | L4_UNKNOWN_PROTOCOL)
++
++#define DPAA2_L3_IPv6_TCP (L3_IPV6_1_PRESENT | L3_IPV6_1_UNICAST | \
++	L3_PROTO_TCP_PRESENT | L3_PROTO_TCP_CTRL_BIT_6_TO_11_PRESENT | \
++	L4_UNKNOWN_PROTOCOL)
++
++#define DPAA2_L3_IPv6_UDP (L3_IPV6_1_PRESENT | L3_IPV6_1_UNICAST | \
++	L3_PROTO_UDP_PRESENT | L4_UNKNOWN_PROTOCOL)
++
+ /* Debug frame, otherwise supposed to be discarded */
+ #define DPAA2_ETH_FAS_DISC	      0x80000000
+ /* MACSEC frame */
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 3b58a48be1b5..5c75cfac3364 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -120,14 +120,13 @@ dpaa2_dev_rx_parse_frc(struct rte_mbuf *m, uint16_t frc)
+ }
+ 
+ static inline uint32_t __attribute__((hot))
+-dpaa2_dev_rx_parse(uint64_t hw_annot_addr)
++dpaa2_dev_rx_parse_slow(uint64_t hw_annot_addr)
+ {
+ 	uint32_t pkt_type = RTE_PTYPE_UNKNOWN;
+ 	struct dpaa2_annot_hdr *annotation =
+ 			(struct dpaa2_annot_hdr *)hw_annot_addr;
+ 
+ 	PMD_RX_LOG(DEBUG, "annotation = 0x%lx   ", annotation->word4);
+-
+ 	if (BIT_ISSET_AT_POS(annotation->word3, L2_ARP_PRESENT)) {
+ 		pkt_type = RTE_PTYPE_L2_ETHER_ARP;
+ 		goto parse_done;
+@@ -183,6 +182,41 @@ dpaa2_dev_rx_parse(uint64_t hw_annot_addr)
+ 	return pkt_type;
+ }
+ 
++
++static inline uint32_t __attribute__((hot))
++dpaa2_dev_rx_parse(uint64_t hw_annot_addr)
++{
++	struct dpaa2_annot_hdr *annotation =
++			(struct dpaa2_annot_hdr *)hw_annot_addr;
++
++	PMD_RX_LOG(DEBUG, "annotation = 0x%lx   ", annotation->word4);
++
++	/* Return some common types from parse processing */
++	switch (annotation->word4) {
++	case DPAA2_L3_IPv4:
++		return RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV4;
++	case DPAA2_L3_IPv6:
++		return  RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV6;
++	case DPAA2_L3_IPv4_TCP:
++		return  RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV4 |
++				RTE_PTYPE_L4_TCP;
++	case DPAA2_L3_IPv4_UDP:
++		return  RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV4 |
++				RTE_PTYPE_L4_UDP;
++	case DPAA2_L3_IPv6_TCP:
++		return  RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV6 |
++				RTE_PTYPE_L4_TCP;
++	case DPAA2_L3_IPv6_UDP:
++		return  RTE_PTYPE_L2_ETHER | RTE_PTYPE_L3_IPV6 |
++				RTE_PTYPE_L4_UDP;
++	default:
++		PMD_RX_LOG(DEBUG, "Slow parse the parsing results\n");
++		break;
++	}
++
++	return dpaa2_dev_rx_parse_slow(hw_annot_addr);
++}
++
+ static inline void __attribute__((hot))
+ dpaa2_dev_rx_offload(uint64_t hw_annot_addr, struct rte_mbuf *mbuf)
+ {
+@@ -279,6 +313,8 @@ eth_fd_to_mbuf(const struct qbman_fd *fd)
+ 	mbuf->data_off = DPAA2_GET_FD_OFFSET(fd);
+ 	mbuf->data_len = DPAA2_GET_FD_LEN(fd);
+ 	mbuf->pkt_len = mbuf->data_len;
++	mbuf->next = NULL;
++	rte_mbuf_refcnt_set(mbuf, 1);
+ 
+ 	/* Parse the packet */
+ 	/* parse results for LX2 are there in FRC field of FD.
+@@ -297,9 +333,6 @@ eth_fd_to_mbuf(const struct qbman_fd *fd)
+ 			     DPAA2_FD_PTA_SIZE, mbuf);
+ 	}
+ 
+-	mbuf->next = NULL;
+-	rte_mbuf_refcnt_set(mbuf, 1);
+-
+ 	PMD_RX_LOG(DEBUG, "to mbuf - mbuf =%p, mbuf->buf_addr =%p, off = %d,"
+ 		"fd_off=%d fd =%lx, meta = %d  bpid =%d, len=%d\n",
+ 		mbuf, mbuf->buf_addr, mbuf->data_off,
+-- 
+2.14.3
+

@@ -1,0 +1,172 @@
+From 7908726e2a7270d4412be2082ec237fbf933712b Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Tue, 16 Jan 2018 02:43:34 +0530
+Subject: [PATCH 059/166] vfio: expose clear group function for internal usages
+
+other vfio based module e.g. fslmc will also need to use
+the clear_group call.
+So, exposing it and renaming it to *rte_vfio_clear_group*
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+Acked-by: Anatoly Burakov <anatoly.burakov@intel.com>
+---
+ lib/librte_eal/bsdapp/eal/eal.c                |  5 +++++
+ lib/librte_eal/common/include/rte_vfio.h       |  4 ++++
+ lib/librte_eal/linuxapp/eal/eal_vfio.c         | 18 +++++++++---------
+ lib/librte_eal/linuxapp/eal/eal_vfio.h         |  4 ----
+ lib/librte_eal/linuxapp/eal/eal_vfio_mp_sync.c |  2 +-
+ lib/librte_eal/rte_eal_version.map             |  1 +
+ 6 files changed, 20 insertions(+), 14 deletions(-)
+
+diff --git a/lib/librte_eal/bsdapp/eal/eal.c b/lib/librte_eal/bsdapp/eal/eal.c
+index 369a682a883d..7239243bc752 100644
+--- a/lib/librte_eal/bsdapp/eal/eal.c
++++ b/lib/librte_eal/bsdapp/eal/eal.c
+@@ -778,3 +778,8 @@ int rte_vfio_noiommu_is_enabled(void)
+ {
+ 	return 0;
+ }
++
++int rte_vfio_clear_group(int vfio_group_fd)
++{
++	return 0;
++}
+diff --git a/lib/librte_eal/common/include/rte_vfio.h b/lib/librte_eal/common/include/rte_vfio.h
+index a69c4ff69b32..daa0dbd207ac 100644
+--- a/lib/librte_eal/common/include/rte_vfio.h
++++ b/lib/librte_eal/common/include/rte_vfio.h
+@@ -148,6 +148,10 @@ int rte_vfio_is_enabled(const char *modname);
+  */
+ int rte_vfio_noiommu_is_enabled(void);
+ 
++/* remove group fd from internal VFIO group fd array */
++int
++rte_vfio_clear_group(int vfio_group_fd);
++
+ #endif /* VFIO_PRESENT */
+ 
+ #endif /* _RTE_VFIO_H_ */
+diff --git a/lib/librte_eal/linuxapp/eal/eal_vfio.c b/lib/librte_eal/linuxapp/eal/eal_vfio.c
+index fb1a62261398..ffb4450230c8 100644
+--- a/lib/librte_eal/linuxapp/eal/eal_vfio.c
++++ b/lib/librte_eal/linuxapp/eal/eal_vfio.c
+@@ -226,7 +226,7 @@ vfio_group_device_count(int vfio_group_fd)
+ }
+ 
+ int
+-clear_group(int vfio_group_fd)
++rte_vfio_clear_group(int vfio_group_fd)
+ {
+ 	int i;
+ 	int socket_fd, ret;
+@@ -329,12 +329,12 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 		RTE_LOG(ERR, EAL, "  %s cannot get group status, "
+ 				"error %i (%s)\n", dev_addr, errno, strerror(errno));
+ 		close(vfio_group_fd);
+-		clear_group(vfio_group_fd);
++		rte_vfio_clear_group(vfio_group_fd);
+ 		return -1;
+ 	} else if (!(group_status.flags & VFIO_GROUP_FLAGS_VIABLE)) {
+ 		RTE_LOG(ERR, EAL, "  %s VFIO group is not viable!\n", dev_addr);
+ 		close(vfio_group_fd);
+-		clear_group(vfio_group_fd);
++		rte_vfio_clear_group(vfio_group_fd);
+ 		return -1;
+ 	}
+ 
+@@ -348,7 +348,7 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 			RTE_LOG(ERR, EAL, "  %s cannot add VFIO group to container, "
+ 					"error %i (%s)\n", dev_addr, errno, strerror(errno));
+ 			close(vfio_group_fd);
+-			clear_group(vfio_group_fd);
++			rte_vfio_clear_group(vfio_group_fd);
+ 			return -1;
+ 		}
+ 
+@@ -370,7 +370,7 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 					"  %s failed to select IOMMU type\n",
+ 					dev_addr);
+ 				close(vfio_group_fd);
+-				clear_group(vfio_group_fd);
++				rte_vfio_clear_group(vfio_group_fd);
+ 				return -1;
+ 			}
+ 			ret = t->dma_map_func(vfio_cfg.vfio_container_fd);
+@@ -379,7 +379,7 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 					"  %s DMA remapping failed, error %i (%s)\n",
+ 					dev_addr, errno, strerror(errno));
+ 				close(vfio_group_fd);
+-				clear_group(vfio_group_fd);
++				rte_vfio_clear_group(vfio_group_fd);
+ 				return -1;
+ 			}
+ 		}
+@@ -395,7 +395,7 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 		RTE_LOG(WARNING, EAL, "Getting a vfio_dev_fd for %s failed\n",
+ 				dev_addr);
+ 		close(vfio_group_fd);
+-		clear_group(vfio_group_fd);
++		rte_vfio_clear_group(vfio_group_fd);
+ 		return -1;
+ 	}
+ 
+@@ -407,7 +407,7 @@ rte_vfio_setup_device(const char *sysfs_base, const char *dev_addr,
+ 				strerror(errno));
+ 		close(*vfio_dev_fd);
+ 		close(vfio_group_fd);
+-		clear_group(vfio_group_fd);
++		rte_vfio_clear_group(vfio_group_fd);
+ 		return -1;
+ 	}
+ 	vfio_group_device_get(vfio_group_fd);
+@@ -467,7 +467,7 @@ rte_vfio_release_device(const char *sysfs_base, const char *dev_addr,
+ 			return -1;
+ 		}
+ 
+-		if (clear_group(vfio_group_fd) < 0) {
++		if (rte_vfio_clear_group(vfio_group_fd) < 0) {
+ 			RTE_LOG(INFO, EAL, "Error when clearing group for %s\n",
+ 					   dev_addr);
+ 			return -1;
+diff --git a/lib/librte_eal/linuxapp/eal/eal_vfio.h b/lib/librte_eal/linuxapp/eal/eal_vfio.h
+index ba7892b7269b..cbe98962253f 100644
+--- a/lib/librte_eal/linuxapp/eal/eal_vfio.h
++++ b/lib/librte_eal/linuxapp/eal/eal_vfio.h
+@@ -177,10 +177,6 @@ vfio_get_group_no(const char *sysfs_base,
+ int
+ vfio_get_group_fd(int iommu_group_no);
+ 
+-/* remove group fd from internal VFIO group fd array */
+-int
+-clear_group(int vfio_group_fd);
+-
+ int vfio_mp_sync_setup(void);
+ 
+ #define SOCKET_REQ_CONTAINER 0x100
+diff --git a/lib/librte_eal/linuxapp/eal/eal_vfio_mp_sync.c b/lib/librte_eal/linuxapp/eal/eal_vfio_mp_sync.c
+index b53ed7eb362f..e32f2e3453b5 100644
+--- a/lib/librte_eal/linuxapp/eal/eal_vfio_mp_sync.c
++++ b/lib/librte_eal/linuxapp/eal/eal_vfio_mp_sync.c
+@@ -333,7 +333,7 @@ vfio_mp_sync_thread(void __rte_unused * arg)
+ 				continue;
+ 			}
+ 
+-			ret = clear_group(vfio_data);
++			ret = rte_vfio_clear_group(vfio_data);
+ 
+ 			if (ret < 0)
+ 				vfio_mp_sync_send_request(conn_sock, SOCKET_NO_FD);
+diff --git a/lib/librte_eal/rte_eal_version.map b/lib/librte_eal/rte_eal_version.map
+index f4f46c1be8b7..70347f4d151d 100644
+--- a/lib/librte_eal/rte_eal_version.map
++++ b/lib/librte_eal/rte_eal_version.map
+@@ -234,5 +234,6 @@ EXPERIMENTAL {
+ 	rte_service_set_runstate_mapped_check;
+ 	rte_service_set_stats_enable;
+ 	rte_service_start_with_defaults;
++	rte_vfio_clear_group;
+ 
+ } DPDK_17.11;
+-- 
+2.14.3
+

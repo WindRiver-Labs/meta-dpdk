@@ -1,0 +1,1226 @@
+From fee1d3db22b8e99d4eac29ceca656620c72cee4c Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 6 Feb 2018 09:08:29 +0530
+Subject: [PATCH 115/166] rawdev: introduce raw device library
+
+Each device in DPDK has a type associated with it - ethernet, crypto,
+event etc. This patch introduces 'rawdevice' which is a generic
+type of device, not currently handled out-of-the-box by DPDK.
+
+A device which can be scanned on an installed bus (pci, fslmc, ...)
+or instantiated through devargs, can be interfaced using
+standardized APIs just like other standardized devices.
+
+This library introduces an API set which can be plugged on the
+northbound side to the application layer, and on the southbound side
+to the driver layer.
+
+The APIs of rawdev library exposes some generic operations which can
+enable configuration and I/O with the raw devices. Using opaque
+data (pointer) as API arguments, library allows a high flexibility
+for application and driver implementation.
+
+This patch introduces basic device operations like start, stop, reset,
+queue and info support.
+Subsequent patches would introduce other operations like buffer
+enqueue/dequeue and firmware support.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ MAINTAINERS                              |   5 +
+ config/common_base                       |   7 +
+ lib/Makefile                             |   2 +
+ lib/librte_rawdev/Makefile               |  28 +++
+ lib/librte_rawdev/rte_rawdev.c           | 360 +++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev.h           | 326 ++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_pmd.h       | 354 ++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_version.map |  21 ++
+ mk/rte.app.mk                            |   1 +
+ 9 files changed, 1104 insertions(+)
+ create mode 100644 lib/librte_rawdev/Makefile
+ create mode 100644 lib/librte_rawdev/rte_rawdev.c
+ create mode 100644 lib/librte_rawdev/rte_rawdev.h
+ create mode 100644 lib/librte_rawdev/rte_rawdev_pmd.h
+ create mode 100644 lib/librte_rawdev/rte_rawdev_version.map
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index ced725aa68ec..c85aae24eb4c 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -292,6 +292,11 @@ F: lib/librte_eventdev/*eth_rx_adapter*
+ F: test/test/test_event_eth_rx_adapter.c
+ F: doc/guides/prog_guide/event_ethernet_rx_adapter.rst
+ 
++Raw device API - EXPERIMENTAL
++M: Shreyansh Jain <shreyansh.jain@nxp.com>
++M: Hemant Agrawal <hemant.agrawal@nxp.com>
++F: lib/librte_rawdev/
++
+ 
+ Bus Drivers
+ -----------
+diff --git a/config/common_base b/config/common_base
+index d0fa284ecf3a..8a3f66fed689 100644
+--- a/config/common_base
++++ b/config/common_base
+@@ -594,6 +594,13 @@ CONFIG_RTE_LIBRTE_PMD_SW_EVENTDEV_DEBUG=n
+ CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF=y
+ CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF_DEBUG=n
+ 
++#
++# Compile raw device support
++# EXPERIMENTAL: API may change without prior notice
++#
++CONFIG_RTE_LIBRTE_RAWDEV=y
++CONFIG_RTE_RAWDEV_MAX_DEVS=10
++
+ #
+ # Compile librte_ring
+ #
+diff --git a/lib/Makefile b/lib/Makefile
+index 26113cda7c30..c2f78486cba9 100644
+--- a/lib/Makefile
++++ b/lib/Makefile
+@@ -58,6 +58,8 @@ DEPDIRS-librte_security += librte_ether
+ DEPDIRS-librte_security += librte_cryptodev
+ DIRS-$(CONFIG_RTE_LIBRTE_EVENTDEV) += librte_eventdev
+ DEPDIRS-librte_eventdev := librte_eal librte_ring librte_ether librte_hash
++DIRS-$(CONFIG_RTE_LIBRTE_RAWDEV) += librte_rawdev
++DEPDIRS-librte_rawdev := librte_eal librte_ether
+ DIRS-$(CONFIG_RTE_LIBRTE_VHOST) += librte_vhost
+ DEPDIRS-librte_vhost := librte_eal librte_mempool librte_mbuf librte_ether
+ DIRS-$(CONFIG_RTE_LIBRTE_HASH) += librte_hash
+diff --git a/lib/librte_rawdev/Makefile b/lib/librte_rawdev/Makefile
+new file mode 100644
+index 000000000000..b9105b060671
+--- /dev/null
++++ b/lib/librte_rawdev/Makefile
+@@ -0,0 +1,28 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2017 NXP
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++# library name
++LIB = librte_rawdev.a
++
++# library version
++LIBABIVER := 1
++
++# build flags
++CFLAGS += -DALLOW_EXPERIMENTAL_API
++CFLAGS += -O3
++CFLAGS += $(WERROR_FLAGS)
++LDLIBS += -lrte_eal
++
++# library source files
++SRCS-y += rte_rawdev.c
++
++# export include files
++SYMLINK-y-include += rte_rawdev.h
++SYMLINK-y-include += rte_rawdev_pmd.h
++
++# versioning export map
++EXPORT_MAP := rte_rawdev_version.map
++
++include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+new file mode 100644
+index 000000000000..e984303b2149
+--- /dev/null
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -0,0 +1,360 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++
++#include <ctype.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <stdarg.h>
++#include <errno.h>
++#include <stdint.h>
++#include <inttypes.h>
++#include <sys/types.h>
++#include <sys/queue.h>
++
++#include <rte_byteorder.h>
++#include <rte_log.h>
++#include <rte_debug.h>
++#include <rte_dev.h>
++#include <rte_memory.h>
++#include <rte_memcpy.h>
++#include <rte_memzone.h>
++#include <rte_eal.h>
++#include <rte_per_lcore.h>
++#include <rte_lcore.h>
++#include <rte_atomic.h>
++#include <rte_branch_prediction.h>
++#include <rte_common.h>
++#include <rte_malloc.h>
++#include <rte_errno.h>
++
++#include "rte_rawdev.h"
++#include "rte_rawdev_pmd.h"
++
++/* dynamic log identifier */
++int librawdev_logtype;
++
++struct rte_rawdev rte_rawdevices[RTE_RAWDEV_MAX_DEVS];
++
++struct rte_rawdev *rte_rawdevs = &rte_rawdevices[0];
++
++static struct rte_rawdev_global rawdev_globals = {
++	.nb_devs		= 0
++};
++
++struct rte_rawdev_global *rte_rawdev_globals = &rawdev_globals;
++
++/* Raw device, northbound API implementation */
++uint8_t
++rte_rawdev_count(void)
++{
++	return rte_rawdev_globals->nb_devs;
++}
++
++uint16_t
++rte_rawdev_get_dev_id(const char *name)
++{
++	uint16_t i;
++
++	if (!name)
++		return -EINVAL;
++
++	for (i = 0; i < rte_rawdev_globals->nb_devs; i++)
++		if ((strcmp(rte_rawdevices[i].name, name)
++				== 0) &&
++				(rte_rawdevices[i].attached ==
++						RTE_RAWDEV_ATTACHED))
++			return i;
++	return -ENODEV;
++}
++
++int
++rte_rawdev_socket_id(uint16_t dev_id)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	return dev->socket_id;
++}
++
++int
++rte_rawdev_info_get(uint16_t dev_id, struct rte_rawdev_info *dev_info)
++{
++	struct rte_rawdev *rawdev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	RTE_FUNC_PTR_OR_ERR_RET(dev_info, -EINVAL);
++
++	if (dev_info == NULL)
++		return -EINVAL;
++
++	rawdev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*rawdev->dev_ops->dev_info_get, -ENOTSUP);
++	(*rawdev->dev_ops->dev_info_get)(rawdev, dev_info->dev_private);
++
++	if (dev_info) {
++
++		dev_info->driver_name = rawdev->driver_name;
++		dev_info->device = rawdev->device;
++	}
++
++	return 0;
++}
++
++int
++rte_rawdev_configure(uint16_t dev_id, struct rte_rawdev_info *dev_conf)
++{
++	struct rte_rawdev *dev;
++	int diag;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	RTE_FUNC_PTR_OR_ERR_RET(dev_conf, -EINVAL);
++
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_configure, -ENOTSUP);
++
++	if (dev->started) {
++		RTE_RDEV_ERR(
++		   "device %d must be stopped to allow configuration", dev_id);
++		return -EBUSY;
++	}
++
++	/* Configure the device */
++	diag = (*dev->dev_ops->dev_configure)(dev, dev_conf->dev_private);
++	if (diag != 0)
++		RTE_RDEV_ERR("dev%d dev_configure = %d", dev_id, diag);
++	else
++		dev->attached = 1;
++
++	return diag;
++}
++
++int
++rte_rawdev_queue_conf_get(uint16_t dev_id,
++			  uint16_t queue_id,
++			  rte_rawdev_obj_t queue_conf)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->queue_def_conf, -ENOTSUP);
++	(*dev->dev_ops->queue_def_conf)(dev, queue_id, queue_conf);
++	return 0;
++}
++
++int
++rte_rawdev_queue_setup(uint16_t dev_id,
++		       uint16_t queue_id,
++		       rte_rawdev_obj_t queue_conf)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->queue_setup, -ENOTSUP);
++	return (*dev->dev_ops->queue_setup)(dev, queue_id, queue_conf);
++}
++
++int
++rte_rawdev_queue_release(uint16_t dev_id, uint16_t queue_id)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->queue_release, -ENOTSUP);
++	return (*dev->dev_ops->queue_release)(dev, queue_id);
++}
++
++int
++rte_rawdev_dump(uint16_t dev_id, FILE *f)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dump, -ENOTSUP);
++	return (*dev->dev_ops->dump)(dev, f);
++}
++
++int
++rte_rawdev_start(uint16_t dev_id)
++{
++	struct rte_rawdev *dev;
++	int diag;
++
++	RTE_RDEV_DEBUG("Start dev_id=%" PRIu8, dev_id);
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_start, -ENOTSUP);
++
++	if (dev->started != 0) {
++		RTE_RDEV_ERR("Device with dev_id=%" PRIu8 "already started",
++			     dev_id);
++		return 0;
++	}
++
++	diag = (*dev->dev_ops->dev_start)(dev);
++	if (diag == 0)
++		dev->started = 1;
++	else
++		return diag;
++
++	return 0;
++}
++
++void
++rte_rawdev_stop(uint16_t dev_id)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RDEV_DEBUG("Stop dev_id=%" PRIu8, dev_id);
++
++	RTE_RAWDEV_VALID_DEVID_OR_RET(dev_id);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_RET(*dev->dev_ops->dev_stop);
++
++	if (dev->started == 0) {
++		RTE_RDEV_ERR("Device with dev_id=%" PRIu8 "already stopped",
++			dev_id);
++		return;
++	}
++
++	(*dev->dev_ops->dev_stop)(dev);
++	dev->started = 0;
++}
++
++int
++rte_rawdev_close(uint16_t dev_id)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_close, -ENOTSUP);
++	/* Device must be stopped before it can be closed */
++	if (dev->started == 1) {
++		RTE_RDEV_ERR("Device %u must be stopped before closing",
++			     dev_id);
++		return -EBUSY;
++	}
++
++	return (*dev->dev_ops->dev_close)(dev);
++}
++
++int
++rte_rawdev_reset(uint16_t dev_id)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dev_reset, -ENOTSUP);
++	/* Reset is not dependent on state of the device */
++	return (*dev->dev_ops->dev_reset)(dev);
++}
++
++static inline uint8_t
++rte_rawdev_find_free_device_index(void)
++{
++	uint16_t dev_id;
++
++	for (dev_id = 0; dev_id < RTE_RAWDEV_MAX_DEVS; dev_id++) {
++		if (rte_rawdevs[dev_id].attached ==
++				RTE_RAWDEV_DETACHED)
++			return dev_id;
++	}
++
++	return RTE_RAWDEV_MAX_DEVS;
++}
++
++struct rte_rawdev *
++rte_rawdev_pmd_allocate(const char *name, size_t dev_priv_size, int socket_id)
++{
++	struct rte_rawdev *rawdev;
++	uint16_t dev_id;
++
++	if (rte_rawdev_pmd_get_named_dev(name) != NULL) {
++		RTE_RDEV_ERR("Event device with name %s already allocated!",
++			     name);
++		return NULL;
++	}
++
++	dev_id = rte_rawdev_find_free_device_index();
++	if (dev_id == RTE_RAWDEV_MAX_DEVS) {
++		RTE_RDEV_ERR("Reached maximum number of raw devices");
++		return NULL;
++	}
++
++	rawdev = &rte_rawdevs[dev_id];
++
++	rawdev->dev_private = rte_zmalloc_socket("rawdev private",
++				     dev_priv_size,
++				     RTE_CACHE_LINE_SIZE,
++				     socket_id);
++	if (!rawdev->dev_private) {
++		RTE_RDEV_ERR("Unable to allocate memory to Skeleton dev");
++		return NULL;
++	}
++
++
++	rawdev->dev_id = dev_id;
++	rawdev->socket_id = socket_id;
++	rawdev->started = 0;
++	snprintf(rawdev->name, RTE_RAWDEV_NAME_MAX_LEN, "%s", name);
++
++	rawdev->attached = RTE_RAWDEV_ATTACHED;
++	rawdev_globals.nb_devs++;
++
++	return rawdev;
++}
++
++int
++rte_rawdev_pmd_release(struct rte_rawdev *rawdev)
++{
++	int ret;
++
++	if (rawdev == NULL)
++		return -EINVAL;
++
++	ret = rte_rawdev_close(rawdev->dev_id);
++	if (ret < 0)
++		return ret;
++
++	rawdev->attached = RTE_RAWDEV_DETACHED;
++	rawdev_globals.nb_devs--;
++
++	rawdev->dev_id = 0;
++	rawdev->socket_id = 0;
++	rawdev->dev_ops = NULL;
++	if (rawdev->dev_private) {
++		rte_free(rawdev->dev_private);
++		rawdev->dev_private = NULL;
++	}
++
++	return 0;
++}
++
++RTE_INIT(librawdev_init_log);
++
++static void
++librawdev_init_log(void)
++{
++	librawdev_logtype = rte_log_register("lib.rawdev");
++	if (librawdev_logtype >= 0)
++		rte_log_set_level(librawdev_logtype, RTE_LOG_INFO);
++}
+diff --git a/lib/librte_rawdev/rte_rawdev.h b/lib/librte_rawdev/rte_rawdev.h
+new file mode 100644
+index 000000000000..6dde5979e7eb
+--- /dev/null
++++ b/lib/librte_rawdev/rte_rawdev.h
+@@ -0,0 +1,326 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++
++#ifndef _RTE_RAWDEV_H_
++#define _RTE_RAWDEV_H_
++
++/**
++ * @file rte_rawdev.h
++ *
++ * Generic device abstraction APIs.
++ *
++ * This API allow applications to configure and use generic devices having
++ * no specific type already available in DPDK.
++ *
++ * @warning
++ * @b EXPERIMENTAL: this API may change without prior notice
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <rte_common.h>
++#include <rte_memory.h>
++#include <rte_errno.h>
++
++/* Rawdevice object - essentially a void to be typecasted by implementation */
++typedef void *rte_rawdev_obj_t;
++
++/**
++ * Get the total number of raw devices that have been successfully
++ * initialised.
++ *
++ * @return
++ *   The total number of usable raw devices.
++ */
++uint8_t
++rte_rawdev_count(void);
++
++/**
++ * Get the device identifier for the named raw device.
++ *
++ * @param name
++ *   Raw device name to select the raw device identifier.
++ *
++ * @return
++ *   Returns raw device identifier on success.
++ *   - <0: Failure to find named raw device.
++ */
++uint16_t
++rte_rawdev_get_dev_id(const char *name);
++
++/**
++ * Return the NUMA socket to which a device is connected.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ * @return
++ *   The NUMA socket id to which the device is connected or
++ *   a default of zero if the socket could not be determined.
++ *   -(-EINVAL)  dev_id value is out of range.
++ */
++int
++rte_rawdev_socket_id(uint16_t dev_id);
++
++/**
++ * Raw device information forward declaration
++ */
++struct rte_rawdev_info;
++
++/**
++ * Retrieve the contextual information of a raw device.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ *
++ * @param[out] dev_info
++ *   A pointer to a structure of type *rte_rawdev_info* to be filled with the
++ *   contextual information of the device.
++ *
++ * @return
++ *   - 0: Success, driver updates the contextual information of the raw device
++ *   - <0: Error code returned by the driver info get function.
++ *
++ */
++int
++rte_rawdev_info_get(uint16_t dev_id, struct rte_rawdev_info *dev_info);
++
++/**
++ * Configure a raw device.
++ *
++ * This function must be invoked first before any other function in the
++ * API. This function can also be re-invoked when a device is in the
++ * stopped state.
++ *
++ * The caller may use rte_rawdev_info_get() to get the capability of each
++ * resources available for this raw device.
++ *
++ * @param dev_id
++ *   The identifier of the device to configure.
++ * @param dev_conf
++ *   The raw device configuration structure encapsulated into rte_rawdev_info
++ *   object.
++ *   It is assumed that the opaque object has enough information which the
++ *   driver/implementation can use to configure the device. It is also assumed
++ *   that once the configuration is done, a `queue_id` type field can be used
++ *   to refer to some arbitrary internal representation of a queue.
++ *
++ * @return
++ *   - 0: Success, device configured.
++ *   - <0: Error code returned by the driver configuration function.
++ */
++int
++rte_rawdev_configure(uint16_t dev_id, struct rte_rawdev_info *dev_conf);
++
++
++/**
++ * Retrieve the current configuration information of a raw queue designated
++ * by its *queue_id* from the raw driver for a raw device.
++ *
++ * This function intended to be used in conjunction with rte_raw_queue_setup()
++ * where caller needs to set up the queue by overriding few default values.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ * @param queue_id
++ *   The index of the raw queue to get the configuration information.
++ *   The value must be in the range [0, nb_raw_queues - 1]
++ *   previously supplied to rte_rawdev_configure().
++ * @param[out] queue_conf
++ *   The pointer to the default raw queue configuration data.
++ * @return
++ *   - 0: Success, driver updates the default raw queue configuration data.
++ *   - <0: Error code returned by the driver info get function.
++ *
++ * @see rte_raw_queue_setup()
++ *
++ */
++int
++rte_rawdev_queue_conf_get(uint16_t dev_id,
++			  uint16_t queue_id,
++			  rte_rawdev_obj_t queue_conf);
++
++/**
++ * Allocate and set up a raw queue for a raw device.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ * @param queue_id
++ *   The index of the raw queue to setup. The value must be in the range
++ *   [0, nb_raw_queues - 1] previously supplied to rte_rawdev_configure().
++ * @param queue_conf
++ *   The pointer to the configuration data to be used for the raw queue.
++ *   NULL value is allowed, in which case default configuration	used.
++ *
++ * @see rte_rawdev_queue_conf_get()
++ *
++ * @return
++ *   - 0: Success, raw queue correctly set up.
++ *   - <0: raw queue configuration failed
++ */
++int
++rte_rawdev_queue_setup(uint16_t dev_id,
++		       uint16_t queue_id,
++		       rte_rawdev_obj_t queue_conf);
++
++/**
++ * Release and deallocate a raw queue from a raw device.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ * @param queue_id
++ *   The index of the raw queue to release. The value must be in the range
++ *   [0, nb_raw_queues - 1] previously supplied to rte_rawdev_configure().
++ *
++ * @see rte_rawdev_queue_conf_get()
++ *
++ * @return
++ *   - 0: Success, raw queue released.
++ *   - <0: raw queue configuration failed
++ */
++int
++rte_rawdev_queue_release(uint16_t dev_id, uint16_t queue_id);
++/**
++ * Get the number of raw queues on a specific raw device
++ *
++ * @param dev_id
++ *   Raw device identifier.
++ * @return
++ *   - The number of configured raw queues
++ */
++uint16_t
++rte_rawdev_queue_count(uint16_t dev_id);
++
++/**
++ * Start a raw device.
++ *
++ * The device start step is the last one and consists of setting the raw
++ * queues to start accepting the raws and schedules to raw ports.
++ *
++ * On success, all basic functions exported by the API (raw enqueue,
++ * raw dequeue and so on) can be invoked.
++ *
++ * @param dev_id
++ *   Raw device identifier
++ * @return
++ *   - 0: Success, device started.
++ *   < 0: Failure
++ */
++int
++rte_rawdev_start(uint16_t dev_id);
++
++/**
++ * Stop a raw device. The device can be restarted with a call to
++ * rte_rawdev_start()
++ *
++ * @param dev_id
++ *   Raw device identifier.
++ */
++void
++rte_rawdev_stop(uint16_t dev_id);
++
++/**
++ * Close a raw device. The device cannot be restarted after this call.
++ *
++ * @param dev_id
++ *   Raw device identifier
++ *
++ * @return
++ *  - 0 on successfully closing device
++ *  - <0 on failure to close device
++ *  - (-EAGAIN) if device is busy
++ */
++int
++rte_rawdev_close(uint16_t dev_id);
++
++/**
++ * Reset a raw device.
++ * This is different from cycle of rte_rawdev_start->rte_rawdev_stop in the
++ * sense similar to hard or soft reset.
++ *
++ * @param dev_id
++ *   Raw device identifiers
++ * @return
++ *   0 for sucessful reset,
++ *  !0 for failure in resetting
++ */
++int
++rte_rawdev_reset(uint16_t dev_id);
++
++#define RTE_RAWDEV_NAME_MAX_LEN	(64)
++/**< @internal Max length of name of raw PMD */
++
++
++
++/** @internal
++ * The data structure associated with each raw device.
++ * It is a placeholder for PMD specific data, encapsulating only information
++ * related to framework.
++ */
++struct rte_rawdev {
++	/**< Socket ID where memory is allocated */
++	int socket_id;
++	/**< Device ID for this instance */
++	uint16_t dev_id;
++	/**< Functions exported by PMD */
++	const struct rte_rawdev_ops *dev_ops;
++	/**< Device info. supplied during device initialization */
++	struct rte_device *device;
++	/**< Driver info. supplied by probing */
++	const char *driver_name;
++
++	RTE_STD_C11
++	/**< Flag indicating the device is attached */
++	uint8_t attached : 1;
++	/**< Device state: STARTED(1)/STOPPED(0) */
++	uint8_t started : 1;
++
++	/**< PMD-specific private data */
++	rte_rawdev_obj_t dev_private;
++	/**< Device name */
++	char name[RTE_RAWDEV_NAME_MAX_LEN];
++} __rte_cache_aligned;
++
++/** @internal The pool of rte_rawdev structures. */
++extern struct rte_rawdev *rte_rawdevs;
++
++
++struct rte_rawdev_info {
++	/**< Name of driver handling this device */
++	const char *driver_name;
++	/**< Device encapsulation */
++	struct rte_device *device;
++	/**< Socket ID where memory is allocated */
++	int socket_id;
++	/**< PMD-specific private data */
++	rte_rawdev_obj_t dev_private;
++};
++
++struct rte_rawdev_buf {
++	/**< Opaque buffer reference */
++	void *buf_addr;
++};
++
++/**
++ * Dump internal information about *dev_id* to the FILE* provided in *f*.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ *
++ * @param f
++ *   A pointer to a file for output
++ *
++ * @return
++ *   - 0: on success
++ *   - <0: on failure.
++ */
++int
++rte_rawdev_dump(uint16_t dev_id, FILE *f);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _RTE_RAWDEV_H_ */
+diff --git a/lib/librte_rawdev/rte_rawdev_pmd.h b/lib/librte_rawdev/rte_rawdev_pmd.h
+new file mode 100644
+index 000000000000..b903ee226ad8
+--- /dev/null
++++ b/lib/librte_rawdev/rte_rawdev_pmd.h
+@@ -0,0 +1,354 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++
++#ifndef _RTE_RAWDEV_PMD_H_
++#define _RTE_RAWDEV_PMD_H_
++
++/** @file
++ * RTE RAW PMD APIs
++ *
++ * @note
++ * Driver facing APIs for a raw device. These are not to be called directly by
++ * any application.
++ *
++ * @warning
++ * @b EXPERIMENTAL: this API may change without prior notice
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <string.h>
++
++#include <rte_dev.h>
++#include <rte_malloc.h>
++#include <rte_log.h>
++#include <rte_common.h>
++
++#include "rte_rawdev.h"
++
++extern int librawdev_logtype;
++
++/* Logging Macros */
++#define RTE_RDEV_LOG(level, fmt, args...) \
++	rte_log(RTE_LOG_ ## level, librawdev_logtype, "%s(): " fmt "\n", \
++		__func__, ##args)
++
++#define RTE_RDEV_ERR(fmt, args...) \
++	RTE_RDEV_LOG(ERR, fmt, ## args)
++#define RTE_RDEV_DEBUG(fmt, args...) \
++	RTE_RDEV_LOG(DEBUG, fmt, ## args)
++#define RTE_RDEV_INFO(fmt, args...) \
++	RTE_RDEV_LOG(INFO, fmt, ## args)
++
++
++/* Macros to check for valid device */
++#define RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, retval) do { \
++	if (!rte_rawdev_pmd_is_valid_dev((dev_id))) { \
++		RTE_RDEV_ERR("Invalid dev_id=%d", dev_id); \
++		return retval; \
++	} \
++} while (0)
++
++#define RTE_RAWDEV_VALID_DEVID_OR_RET(dev_id) do { \
++	if (!rte_rawdev_pmd_is_valid_dev((dev_id))) { \
++		RTE_RDEV_ERR("Invalid dev_id=%d", dev_id); \
++		return; \
++	} \
++} while (0)
++
++#define RTE_RAWDEV_DETACHED  (0)
++#define RTE_RAWDEV_ATTACHED  (1)
++
++/* Global structure used for maintaining state of allocated raw devices.
++ *
++ * TODO: Can be expanded to <type of raw device>:<count> in future.
++ *       Applications should be able to select from a number of type of raw
++ *       devices which were detected or attached to this DPDK instance.
++ */
++struct rte_rawdev_global {
++	/**< Number of devices found */
++	uint16_t nb_devs;
++};
++
++extern struct rte_rawdev_global *rte_rawdev_globals;
++/** Pointer to global raw devices data structure. */
++extern struct rte_rawdev *rte_rawdevs;
++/** The pool of rte_rawdev structures. */
++
++/**
++ * Get the rte_rawdev structure device pointer for the named device.
++ *
++ * @param name
++ *   device name to select the device structure.
++ *
++ * @return
++ *   - The rte_rawdev structure pointer for the given device ID.
++ */
++static inline struct rte_rawdev *
++rte_rawdev_pmd_get_named_dev(const char *name)
++{
++	struct rte_rawdev *dev;
++	unsigned int i;
++
++	if (name == NULL)
++		return NULL;
++
++	for (i = 0; i < RTE_RAWDEV_MAX_DEVS; i++) {
++		dev = &rte_rawdevs[i];
++		if ((dev->attached == RTE_RAWDEV_ATTACHED) &&
++		   (strcmp(dev->name, name) == 0))
++			return dev;
++	}
++
++	return NULL;
++}
++
++/**
++ * Validate if the raw device index is a valid attached raw device.
++ *
++ * @param dev_id
++ *   raw device index.
++ *
++ * @return
++ *   - If the device index is valid (1) or not (0).
++ */
++static inline unsigned
++rte_rawdev_pmd_is_valid_dev(uint8_t dev_id)
++{
++	struct rte_rawdev *dev;
++
++	if (dev_id >= RTE_RAWDEV_MAX_DEVS)
++		return 0;
++
++	dev = &rte_rawdevs[dev_id];
++	if (dev->attached != RTE_RAWDEV_ATTACHED)
++		return 0;
++	else
++		return 1;
++}
++
++/**
++ * Definitions of all functions exported by a driver through the
++ * the generic structure of type *rawdev_ops* supplied in the
++ * *rte_rawdev* structure associated with a device.
++ */
++
++/**
++ * Get device information of a device.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param dev_info
++ *   Raw device information structure
++ *
++ * @return
++ *   Returns 0 on success
++ */
++typedef void (*rawdev_info_get_t)(struct rte_rawdev *dev,
++				  rte_rawdev_obj_t dev_info);
++
++/**
++ * Configure a device.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param config
++ *   Void object containing device specific configuration
++ *
++ * @return
++ *   Returns 0 on success
++ */
++typedef int (*rawdev_configure_t)(const struct rte_rawdev *dev,
++				  rte_rawdev_obj_t config);
++
++/**
++ * Start a configured device.
++ *
++ * @param dev
++ *   Raw device pointer
++ *
++ * @return
++ *   Returns 0 on success
++ */
++typedef int (*rawdev_start_t)(struct rte_rawdev *dev);
++
++/**
++ * Stop a configured device.
++ *
++ * @param dev
++ *   Raw device pointer
++ */
++typedef void (*rawdev_stop_t)(struct rte_rawdev *dev);
++
++/**
++ * Close a configured device.
++ *
++ * @param dev
++ *   Raw device pointer
++ *
++ * @return
++ * - 0 on success
++ * - (-EAGAIN) if can't close as device is busy
++ */
++typedef int (*rawdev_close_t)(struct rte_rawdev *dev);
++
++/**
++ * Reset a configured device.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @return
++ *   0 for success
++ *   !0 for failure
++ */
++typedef int (*rawdev_reset_t)(struct rte_rawdev *dev);
++
++/**
++ * Retrieve the current raw queue configuration.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param queue_id
++ *   Raw device queue index
++ * @param[out] queue_conf
++ *   Raw device queue configuration structure
++ *
++ */
++typedef void (*rawdev_queue_conf_get_t)(struct rte_rawdev *dev,
++					uint16_t queue_id,
++					rte_rawdev_obj_t queue_conf);
++
++/**
++ * Setup an raw queue.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param queue_id
++ *   Rawqueue index
++ * @param queue_conf
++ *   Rawqueue configuration structure
++ *
++ * @return
++ *   Returns 0 on success.
++ */
++typedef int (*rawdev_queue_setup_t)(struct rte_rawdev *dev,
++				    uint16_t queue_id,
++				    rte_rawdev_obj_t queue_conf);
++
++/**
++ * Release resources allocated by given raw queue.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param queue_id
++ *   Raw queue index
++ *
++ */
++typedef int (*rawdev_queue_release_t)(struct rte_rawdev *dev,
++				      uint16_t queue_id);
++
++/**
++ * Dump internal information
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param f
++ *   A pointer to a file for output
++ * @return
++ *   0 for success,
++ *   !0 Error
++ *
++ */
++typedef int (*rawdev_dump_t)(struct rte_rawdev *dev, FILE *f);
++
++/** Rawdevice operations function pointer table */
++struct rte_rawdev_ops {
++	/**< Get device info. */
++	rawdev_info_get_t dev_info_get;
++	/**< Configure device. */
++	rawdev_configure_t dev_configure;
++	/**< Start device. */
++	rawdev_start_t dev_start;
++	/**< Stop device. */
++	rawdev_stop_t dev_stop;
++	/**< Close device. */
++	rawdev_close_t dev_close;
++	/**< Reset device. */
++	rawdev_reset_t dev_reset;
++
++	/**< Get raw queue configuration. */
++	rawdev_queue_conf_get_t queue_def_conf;
++	/**< Set up an raw queue. */
++	rawdev_queue_setup_t queue_setup;
++	/**< Release an raw queue. */
++	rawdev_queue_release_t queue_release;
++
++	/* Dump internal information */
++	rawdev_dump_t dump;
++};
++
++/**
++ * Allocates a new rawdev slot for an raw device and returns the pointer
++ * to that slot for the driver to use.
++ *
++ * @param name
++ *   Unique identifier name for each device
++ * @param dev_private_size
++ *   Private data allocated within rte_rawdev object.
++ * @param socket_id
++ *   Socket to allocate resources on.
++ * @return
++ *   - Slot in the rte_dev_devices array for a new device;
++ */
++struct rte_rawdev *
++rte_rawdev_pmd_allocate(const char *name, size_t dev_private_size,
++			int socket_id);
++
++/**
++ * Release the specified rawdev device.
++ *
++ * @param rawdev
++ * The *rawdev* pointer is the address of the *rte_rawdev* structure.
++ * @return
++ *   - 0 on success, negative on error
++ */
++int
++rte_rawdev_pmd_release(struct rte_rawdev *rawdev);
++
++/**
++ * Creates a new raw device and returns the pointer to that device.
++ *
++ * @param name
++ *   Pointer to a character array containing name of the device
++ * @param dev_private_size
++ *   Size of raw PMDs private data
++ * @param socket_id
++ *   Socket to allocate resources on.
++ *
++ * @return
++ *   - Raw device pointer if device is successfully created.
++ *   - NULL if device cannot be created.
++ */
++struct rte_rawdev *
++rte_rawdev_pmd_init(const char *name, size_t dev_private_size,
++		    int socket_id);
++
++/**
++ * Destroy a raw device
++ *
++ * @param name
++ *   Name of the device
++ * @return
++ *   - 0 on success, negative on error
++ */
++int
++rte_rawdev_pmd_uninit(const char *name);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _RTE_RAWDEV_PMD_H_ */
+diff --git a/lib/librte_rawdev/rte_rawdev_version.map b/lib/librte_rawdev/rte_rawdev_version.map
+new file mode 100644
+index 000000000000..64e60d945f6a
+--- /dev/null
++++ b/lib/librte_rawdev/rte_rawdev_version.map
+@@ -0,0 +1,21 @@
++EXPERIMENTAL {
++	global:
++
++	rte_rawdev_close;
++	rte_rawdev_configure;
++	rte_rawdev_count;
++	rte_rawdev_get_dev_id;
++	rte_rawdev_info_get;
++	rte_rawdev_pmd_allocate;
++	rte_rawdev_pmd_release;
++	rte_rawdev_queue_conf_get;
++	rte_rawdev_queue_setup;
++	rte_rawdev_queue_release;
++	rte_rawdev_reset;
++	rte_rawdev_socket_id;
++	rte_rawdev_start;
++	rte_rawdev_stop;
++	rte_rawdevs;
++
++	local: *;
++};
+diff --git a/mk/rte.app.mk b/mk/rte.app.mk
+index 0df399c8e5a4..067de42e4c5d 100644
+--- a/mk/rte.app.mk
++++ b/mk/rte.app.mk
+@@ -96,6 +96,7 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_ETHER)          += -lrte_ethdev
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_CRYPTODEV)      += -lrte_cryptodev
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_SECURITY)       += -lrte_security
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_EVENTDEV)       += -lrte_eventdev
++_LDLIBS-$(CONFIG_RTE_LIBRTE_RAWDEV)         += -lrte_rawdev
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_MEMPOOL)        += -lrte_mempool
+ _LDLIBS-$(CONFIG_RTE_DRIVER_MEMPOOL_RING)   += -lrte_mempool_ring
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_RING)           += -lrte_ring
+-- 
+2.14.3
+

@@ -1,0 +1,405 @@
+From 23d6e5d571ee33b48d544a4a4810eb8f550f22a7 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Tue, 19 Dec 2017 15:44:38 +0530
+Subject: [PATCH 155/166] license: introduce SPDX identifiers
+
+The DPDK uses the Open Source BSD-3-Clause license for the core libraries
+and drivers. The kernel components are naturally GPLv2 licensed.
+
+Many of the files in the DPDK source code contain the full text of the
+applicable license. For example, most of the BSD-3-Clause files contain a
+full copy of the BSD-3-Clause license text.
+
+Including big blocks of License headers in all files blows up the source
+code with mostly redundant information.  An additional problem is that even
+the same licenses are referred to by a number of slightly varying text
+blocks (full, abbreviated, different indentation, line wrapping and/or
+white space, with obsolete address information, ...) which makes validation
+and automatic processing a nightmare.
+
+To make this easier, DPDK uses of a single line reference to
+Unique License Identifiers in source files as defined by the Linux
+Foundation's SPDX project https://spdk.org.
+
+Adding license information in this fashion, rather than adding full license
+text, can be more efficient for developers; decreases errors; and improves
+automated detection of licenses. The current set of valid, predefined SPDX
+identifiers is set forth on the SPDX License List at
+https://spdx.org/licenses/.
+
+For example, to label a file as subject to the BSD-3-Clause license,
+the following text would be used as the top line of the file.
+
+SPDX-License-Identifier: BSD-3-Clause
+
+Note: Any new file contributions in DPDK shall adhere to the above scheme.
+It is also recommended to replace or at least amend the existing license
+text in the code with SPDX-License-Identifiers.
+
+Any exception to DPDK IP policies shall be approved by DPDK tech board and
+DPDK Governing Board. Steps for any exception approval:
+1. Mention the appropriate license identifier form SPDX. If the license is
+   not listed in SPDX Licenses. It is the submitters responsibiliity to get
+   it first listed.
+2. Get the required approval from the DPDK Technical Board. Technical board
+   may advise the author to check alternate means first. If no other
+   alternatives are found and the merit of the contributions are important
+   for DPDK's mission, it may decide on such exception with two-thirds vote
+   of the members.
+3. Technical board then approach Governing board for such limited approval
+   for the given contribution only.
+
+Any approvals shall be documented in "licenses/exceptions.txt" with record
+dates.
+
+Note: From the legal point of view, this patch is supposed to be only a
+change to the textual representation of the license information, but in no
+way any change to the actual license terms. With this patch applied, all
+files will still be licensed under the same terms they were before.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+Acked-by: Stephen Hemminger <stephen@networkplumber.org>
+Acked-by: Thomas Monjalon <thomas@monjalon.net>
+---
+ MAINTAINERS                          |  1 +
+ README                               |  4 +-
+ doc/guides/contributing/patches.rst  | 23 +++++++++++
+ license/README                       | 77 ++++++++++++++++++++++++++++++++++++
+ license/bsd-3-clause.txt             |  9 +++++
+ license/exceptions.txt               | 18 +++++++++
+ LICENSE.GPL => license/gpl-2.0.txt   | 14 +++----
+ LICENSE.LGPL => license/lgpl-2.1.txt | 18 ++++-----
+ 8 files changed, 146 insertions(+), 18 deletions(-)
+ create mode 100644 license/README
+ create mode 100644 license/bsd-3-clause.txt
+ create mode 100644 license/exceptions.txt
+ rename LICENSE.GPL => license/gpl-2.0.txt (98%)
+ rename LICENSE.LGPL => license/lgpl-2.1.txt (99%)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index efccdfc4c7fe..cd5146e8c278 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -51,6 +51,7 @@ F: devtools/get-maintainer.sh
+ F: devtools/git-log-fixes.sh
+ F: devtools/load-devel-config
+ F: devtools/test-build.sh
++F: license/
+ 
+ 
+ Build System
+diff --git a/README b/README
+index 29ba0e0e33a9..55df158642aa 100644
+--- a/README
++++ b/README
+@@ -1,8 +1,8 @@
+ DPDK is a set of libraries and drivers for fast packet processing.
+ It supports many processor architectures and both FreeBSD and Linux.
+ 
+-The DPDK uses the Open Source BSD license for the core libraries and
+-drivers. The kernel components are GPLv2 licensed.
++The DPDK uses the Open Source BSD-3-Clause license for the core libraries
++and drivers. The kernel components are GPL-2.0 licensed.
+ 
+ Please check the doc directory for release notes,
+ API documentation, and sample application information.
+diff --git a/doc/guides/contributing/patches.rst b/doc/guides/contributing/patches.rst
+index 40983c15096d..64408e788bed 100644
+--- a/doc/guides/contributing/patches.rst
++++ b/doc/guides/contributing/patches.rst
+@@ -32,6 +32,29 @@ It is also worth registering for the DPDK `Patchwork <http://dpdk.org/dev/patchw
+ The development process requires some familiarity with the ``git`` version control system.
+ Refer to the `Pro Git Book <http://www.git-scm.com/book/>`_ for further information.
+ 
++Source License
++--------------
++
++The DPDK uses the Open Source BSD-3-Clause license for the core libraries and
++drivers. The kernel components are GPL-2.0 licensed. DPDK uses single line
++reference to Unique License Identifiers in source files as defined by the Linux
++Foundation's `SPDX project <http://spdx.org/>`_.
++
++DPDK uses first line of the file to be SPDX tag. In case of *#!* scripts, SPDX
++tag can be placed in 2nd line of the file.
++
++For example, to label a file as subject to the BSD-3-Clause license,
++the following text would be used:
++
++``SPDX-License-Identifier: BSD-3-Clause``
++
++To label a file as dual-licensed with BSD-3-Clause and GPL-2.0 (e.g., for code
++that is shared between the kernel and userspace), the following text would be
++used:
++
++``SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)``
++
++Refer to ``licenses/README`` for more details.
+ 
+ Maintainers and Sub-trees
+ -------------------------
+diff --git a/license/README b/license/README
+new file mode 100644
+index 000000000000..874abaf4cd1e
+--- /dev/null
++++ b/license/README
+@@ -0,0 +1,77 @@
++The DPDK uses the Open Source BSD-3-Clause license for the core libraries and
++drivers. The kernel components are naturally GPL-2.0 licensed.
++
++Including big blocks of License headers in all files blows up the
++source code with mostly redundant information.  An additional problem
++is that even the same licenses are referred to by a number of
++slightly varying text blocks (full, abbreviated, different
++indentation, line wrapping and/or white space, with obsolete address
++information, ...) which makes validation and automatic processing a nightmare.
++
++To make this easier, DPDK uses a single line reference to Unique License
++Identifiers in source files as defined by the Linux Foundation's SPDX project
++(https://spdx.org/).
++
++Adding license information in this fashion, rather than adding full license
++text, can be more efficient for developers; decreases errors; and improves
++automated detection of licenses. The current set of valid, predefined SPDX
++identifiers is set forth on the SPDX License List at https://spdx.org/licenses/.
++
++DPDK uses first line of the file to be SPDX tag. In case of *#!* scripts, SPDX
++tag can be placed in 2nd line of the file.
++
++For example, to label a file as subject to the BSD-3-Clause license,
++the following text would be used:
++
++SPDX-License-Identifier: BSD-3-Clause
++
++To label a file as GPL-2.0 (e.g., for code that runs in the kernel), the
++following text would be used:
++
++SPDX-License-Identifier: GPL-2.0
++
++To label a file as dual-licensed with BSD-3-Clause and GPL-2.0 (e.g., for code
++that is shared between the kernel and userspace), the following text would be
++used:
++
++SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++
++To label a file as dual-licensed with BSD-3-Clause and LGPL-2.1 (e.g., for code
++that is shared between the kernel and userspace), the following text would be
++used:
++
++SPDX-License-Identifier: (BSD-3-Clause OR LGPL-2.1)
++
++Any new file contributions in DPDK shall adhere to the above scheme.
++It is also being recommended to replace the existing license text in the code
++with SPDX-License-Identifiers.
++
++Any exception to the DPDK IP policies shall be approved by DPDK Tech Board and
++DPDK Governing Board. Steps for any exception approval:
++1. Mention the appropriate license identifier form SPDX. If the license is not
++   listed in SPDX Licenses. It is the submitters responsibiliity to get it
++   first listed.
++2. Get the required approval from the DPDK Technical Board. Technical Board may
++   advise the author to check alternate means first. If no other alternative
++   are found and the merit of the contributions are important for DPDK's
++   mission, it may decide on such exception with two-thirds vote of the members.
++3. Technical Board then approach Governing Board for such limited approval for
++   the given contribution only.
++
++Any approvals shall be documented in "Licenses/exceptions.txt" with record
++dates.
++
++DPDK project supported licenses are:
++
++1. BSD 3-clause "New" or "Revised" License
++	SPDX-License-Identifier: BSD-3-Clause
++	URL: http://spdx.org/licenses/BSD-3-Clause#licenseText
++	DPDK License text: licenses/bsd-3-clause.txt
++2. GNU General Public License v2.0 only
++	SPDX-License-Identifier: GPL-2.0
++	URL: http://spdx.org/licenses/GPL-2.0.html#licenseText
++	DPDK License text: licenses/gpl-2.0.txt
++3. GNU Lesser General Public License v2.1
++	SPDX-License-Identifieri: LGPL-2.1
++	URL: http://spdx.org/licenses/LGPL-2.1.html#licenseText
++	DPDK License text: licenses/lgpl-2.1.txt
+diff --git a/license/bsd-3-clause.txt b/license/bsd-3-clause.txt
+new file mode 100644
+index 000000000000..731a7373159e
+--- /dev/null
++++ b/license/bsd-3-clause.txt
+@@ -0,0 +1,9 @@
++Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
++
++1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
++
++2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
++
++3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
++
++THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+diff --git a/license/exceptions.txt b/license/exceptions.txt
+new file mode 100644
+index 000000000000..f2ef03706bb5
+--- /dev/null
++++ b/license/exceptions.txt
+@@ -0,0 +1,18 @@
++This file will record any exceptions in DPDK Project with respect to DPDK
++IP License policy as defined in DPDK Charter available at:
++
++	http://dpdk.org/about/charter#ip
++
++Note that following licenses are not exceptions:-
++	- BSD-3-Clause
++	- Dual BSD-3-Clause OR GPL-2.0
++	- Dual BSD-3-Clause OR LGPL-2.1
++	- GPL-2.0  (*Only for kernel code*)
++
++-----------------------------------------------------------------
++SPDX Identifier     TB Approval Date  GB Approval Date  File name
++-----------------------------------------------------------------
++1.
++
++-----------------------------------------------------------------
++
+diff --git a/LICENSE.GPL b/license/gpl-2.0.txt
+similarity index 98%
+rename from LICENSE.GPL
+rename to license/gpl-2.0.txt
+index d511905c1647..d159169d1050 100644
+--- a/LICENSE.GPL
++++ b/license/gpl-2.0.txt
+@@ -1,12 +1,12 @@
+-		    GNU GENERAL PUBLIC LICENSE
+-		       Version 2, June 1991
++                    GNU GENERAL PUBLIC LICENSE
++                       Version 2, June 1991
+ 
+  Copyright (C) 1989, 1991 Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+  Everyone is permitted to copy and distribute verbatim copies
+  of this license document, but changing it is not allowed.
+ 
+-			    Preamble
++                            Preamble
+ 
+   The licenses for most software are designed to take away your
+ freedom to share and change it.  By contrast, the GNU General Public
+@@ -56,7 +56,7 @@ patent must be licensed for everyone's free use or not licensed at all.
+   The precise terms and conditions for copying, distribution and
+ modification follow.
+ 
+-		    GNU GENERAL PUBLIC LICENSE
++                    GNU GENERAL PUBLIC LICENSE
+    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+ 
+   0. This License applies to any program or other work which contains
+@@ -255,7 +255,7 @@ make exceptions for this.  Our decision will be guided by the two goals
+ of preserving the free status of all derivatives of our free software and
+ of promoting the sharing and reuse of software generally.
+ 
+-			    NO WARRANTY
++                            NO WARRANTY
+ 
+   11. BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+ FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW.  EXCEPT WHEN
+@@ -277,9 +277,9 @@ YOU OR THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER
+ PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGES.
+ 
+-		     END OF TERMS AND CONDITIONS
++                     END OF TERMS AND CONDITIONS
+ 
+-	    How to Apply These Terms to Your New Programs
++            How to Apply These Terms to Your New Programs
+ 
+   If you develop a new program, and you want it to be of the greatest
+ possible use to the public, the best way to achieve this is to make it
+diff --git a/LICENSE.LGPL b/license/lgpl-2.1.txt
+similarity index 99%
+rename from LICENSE.LGPL
+rename to license/lgpl-2.1.txt
+index 4362b49151d7..e5ab03e1238a 100644
+--- a/LICENSE.LGPL
++++ b/license/lgpl-2.1.txt
+@@ -55,7 +55,7 @@ modified by someone else and passed on, the recipients should know
+ that what they have is not the original version, so that the original
+ author's reputation will not be affected by problems that might be
+ introduced by others.
+-
++
+   Finally, software patents pose a constant threat to the existence of
+ any free program.  We wish to make sure that a company cannot
+ effectively restrict the users of a free program by obtaining a
+@@ -111,7 +111,7 @@ modification follow.  Pay close attention to the difference between a
+ "work based on the library" and a "work that uses the library".  The
+ former contains code derived from the library, whereas the latter must
+ be combined with the library in order to run.
+-
++
+                   GNU LESSER GENERAL PUBLIC LICENSE
+    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+ 
+@@ -158,7 +158,7 @@ Library.
+   You may charge a fee for the physical act of transferring a copy,
+ and you may at your option offer warranty protection in exchange for a
+ fee.
+-
++
+   2. You may modify your copy or copies of the Library or any portion
+ of it, thus forming a work based on the Library, and copy and
+ distribute such modifications or work under the terms of Section 1
+@@ -216,7 +216,7 @@ instead of to this License.  (If a newer version than version 2 of the
+ ordinary GNU General Public License has appeared, then you can specify
+ that version instead if you wish.)  Do not make any other change in
+ these notices.
+-
++
+   Once this change is made in a given copy, it is irreversible for
+ that copy, so the ordinary GNU General Public License applies to all
+ subsequent copies and derivative works made from that copy.
+@@ -267,7 +267,7 @@ Library will still fall under Section 6.)
+ distribute the object code for the work under the terms of Section 6.
+ Any executables containing that work also fall under Section 6,
+ whether or not they are linked directly with the Library itself.
+-
++
+   6. As an exception to the Sections above, you may also combine or
+ link a "work that uses the Library" with the Library to produce a
+ work containing portions of the Library, and distribute that work
+@@ -329,7 +329,7 @@ restrictions of other proprietary libraries that do not normally
+ accompany the operating system.  Such a contradiction means you cannot
+ use both them and the Library together in an executable that you
+ distribute.
+-
++
+   7. You may place library facilities that are a work based on the
+ Library side-by-side in a single library together with other library
+ facilities not covered by this License, and distribute such a combined
+@@ -370,7 +370,7 @@ subject to these terms and conditions.  You may not impose any further
+ restrictions on the recipients' exercise of the rights granted herein.
+ You are not responsible for enforcing compliance by third parties with
+ this License.
+-
++
+   11. If, as a consequence of a court judgment or allegation of patent
+ infringement or for any other reason (not limited to patent issues),
+ conditions are imposed on you (whether by court order, agreement or
+@@ -422,7 +422,7 @@ conditions either of that version or of any later version published by
+ the Free Software Foundation.  If the Library does not specify a
+ license version number, you may choose any version ever published by
+ the Free Software Foundation.
+-
++
+   14. If you wish to incorporate parts of the Library into other free
+ programs whose distribution conditions are incompatible with these,
+ write to the author to ask for permission.  For software which is
+@@ -456,7 +456,7 @@ SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH
+ DAMAGES.
+ 
+                      END OF TERMS AND CONDITIONS
+-
++
+            How to Apply These Terms to Your New Libraries
+ 
+   If you develop a new library, and you want it to be of the greatest
+-- 
+2.14.3
+

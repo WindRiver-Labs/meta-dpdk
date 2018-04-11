@@ -1,0 +1,37 @@
+From 73229f5e82d3f673d062b0fd003fb94d07ed9b89 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 7 Jul 2017 15:08:16 +0530
+Subject: [PATCH 088/166] PVT: bus/fslmc: dpio affinity for virtual m/c using
+ env variable
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+index 38abdd39e8c1..16f4d621c012 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+@@ -279,6 +279,18 @@ dpaa2_configure_stashing(struct dpaa2_dpio_dev *dpio_dev, int cpu_id)
+ 			return -1;
+ 		}
+ 	}
++
++	/*
++	 *  In case of running DPDK on the Virtual Machine the Stashing
++	 *  Destination gets set in the H/W w.r.t. the Virtual CPU ID's.
++	 *  As a W.A. environment variable HOST_START_CPU tells which
++	 *  the offset of the host start core of the Virtual Machine threads.
++	 */
++	if (getenv("DPAA2_HOST_START_CPU")) {
++		cpu_id += atoi(getenv("DPAA2_HOST_START_CPU"));
++		cpu_id = cpu_id % NUM_HOST_CPUS;
++	}
++
+ 	/* Set the STASH Destination depending on Current CPU ID.
+ 	 * Valid values of SDEST are 4,5,6,7. Where,
+ 	 */
+-- 
+2.14.3
+

@@ -1,0 +1,53 @@
+From 5ea06bce7168550c0dc4926aee965493eae2f8cd Mon Sep 17 00:00:00 2001
+From: Ashish Jain <ashish.jain@nxp.com>
+Date: Mon, 5 Mar 2018 16:42:51 +0530
+Subject: [PATCH 161/166] PVT: crypto/dpaa_sec: adding a check to create
+ mempool only once per device
+
+Adding a check to create mempool only once per device.
+dev_configure can be called multiple times by the application but
+mempool allocation should only be done once per device.
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+DPDK-1215
+---
+ drivers/crypto/dpaa_sec/dpaa_sec.c | 22 +++++++++++++---------
+ 1 file changed, 13 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.c b/drivers/crypto/dpaa_sec/dpaa_sec.c
+index e0deba6f259a..309b764860b6 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.c
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.c
+@@ -2200,16 +2200,20 @@ dpaa_sec_dev_configure(struct rte_cryptodev *dev,
+ 
+ 	internals = dev->data->dev_private;
+ 	sprintf(str, "ctx_pool_%d", dev->data->dev_id);
+-	internals->ctx_pool = rte_mempool_create((const char *)str,
+-						CTX_POOL_NUM_BUFS,
+-						CTX_POOL_BUF_SIZE,
+-						CTX_POOL_CACHE_SIZE, 0,
+-						NULL, NULL, NULL, NULL,
+-						SOCKET_ID_ANY, 0);
+ 	if (!internals->ctx_pool) {
+-	      RTE_LOG(ERR, PMD, "%s create failed\n", str);
+-	      return -ENOMEM;
+-	}
++		internals->ctx_pool = rte_mempool_create((const char *)str,
++							CTX_POOL_NUM_BUFS,
++							CTX_POOL_BUF_SIZE,
++							CTX_POOL_CACHE_SIZE, 0,
++							NULL, NULL, NULL, NULL,
++							SOCKET_ID_ANY, 0);
++		if (!internals->ctx_pool) {
++			RTE_LOG(ERR, PMD, "%s create failed\n", str);
++			return -ENOMEM;
++		}
++	} else
++		RTE_LOG(INFO, PMD, "mempool already created for dev_id : %d\n",
++								dev->data->dev_id);
+ 
+ 	return 0;
+ }
+-- 
+2.14.3
+

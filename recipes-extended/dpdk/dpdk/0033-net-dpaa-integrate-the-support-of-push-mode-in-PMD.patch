@@ -1,0 +1,228 @@
+From 2dccd7a284daa15556276205e03a95ae886e3a1c Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 7 Dec 2017 11:03:46 +0530
+Subject: [PATCH 033/166] net/dpaa: integrate the support of push mode in PMD
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ doc/guides/nics/dpaa.rst       | 11 ++++++++
+ drivers/net/dpaa/dpaa_ethdev.c | 64 +++++++++++++++++++++++++++++++++++++-----
+ drivers/net/dpaa/dpaa_ethdev.h |  2 +-
+ drivers/net/dpaa/dpaa_rxtx.c   | 34 ++++++++++++++++++++++
+ drivers/net/dpaa/dpaa_rxtx.h   |  5 ++++
+ 5 files changed, 108 insertions(+), 8 deletions(-)
+
+diff --git a/doc/guides/nics/dpaa.rst b/doc/guides/nics/dpaa.rst
+index d331c05328bb..1d93b3c4b3a3 100644
+--- a/doc/guides/nics/dpaa.rst
++++ b/doc/guides/nics/dpaa.rst
+@@ -315,6 +315,17 @@ state during application initialization:
+   In case the application is configured to use lesser number of queues than
+   configured above, it might result in packet loss (because of distribution).
+ 
++- ``DPAA_PUSH_QUEUES_NUMBER`` (default 4)
++
++  This defines the number of High performance queues to be used for ethdev Rx.
++  These queues use one private HW portal per queue configured, so they are
++  limited in the system. The first configured ethdev queues will be
++  automatically be assigned from the these high perf PUSH queues. Any queue
++  configuration beyond that will be standard Rx queues. The application can
++  choose to change their number if HW portals are limited.
++  The valid values are from '0' to '4'. The valuse shall be set to '0' if the
++  application want to use eventdev with DPAA device.
++
+ 
+ Driver compilation and testing
+ ------------------------------
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index ce1fce6e3f40..74a5bedfed13 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -73,6 +73,14 @@
+ 
+ /* Keep track of whether QMAN and BMAN have been globally initialized */
+ static int is_global_init;
++/* At present we only allow up to 4 push mode queues - as each of this queue
++ * need dedicated portal and we are short of portals.
++ */
++#define DPAA_MAX_PUSH_MODE_QUEUE       4
++
++static int dpaa_push_mode_max_queue = DPAA_MAX_PUSH_MODE_QUEUE;
++static int dpaa_push_queue_idx; /* Queue index which are in push mode*/
++
+ 
+ /* Per FQ Taildrop in frame count */
+ static unsigned int td_threshold = CGR_RX_PERFQ_THRESH;
+@@ -460,6 +468,9 @@ int dpaa_eth_rx_queue_setup(struct rte_eth_dev *dev, uint16_t queue_idx,
+ {
+ 	struct dpaa_if *dpaa_intf = dev->data->dev_private;
+ 	struct qman_fq *rxq = &dpaa_intf->rx_queues[queue_idx];
++	struct qm_mcc_initfq opts = {0};
++	u32 flags = 0;
++	int ret;
+ 
+ 	PMD_INIT_FUNC_TRACE();
+ 
+@@ -495,13 +506,45 @@ int dpaa_eth_rx_queue_setup(struct rte_eth_dev *dev, uint16_t queue_idx,
+ 			    dpaa_intf->name, fd_offset,
+ 			fman_if_get_fdoff(dpaa_intf->fif));
+ 	}
+-
++	/* checking if push mode only, no error check for now */
++	if (dpaa_push_mode_max_queue > dpaa_push_queue_idx) {
++		dpaa_push_queue_idx++;
++		opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_CONTEXTA;
++		opts.fqd.fq_ctrl = QM_FQCTRL_AVOIDBLOCK |
++				   QM_FQCTRL_CTXASTASHING |
++				   QM_FQCTRL_PREFERINCACHE;
++		opts.fqd.context_a.stashing.exclusive = 0;
++		opts.fqd.context_a.stashing.annotation_cl =
++						DPAA_IF_RX_ANNOTATION_STASH;
++		opts.fqd.context_a.stashing.data_cl = DPAA_IF_RX_DATA_STASH;
++		opts.fqd.context_a.stashing.context_cl =
++						DPAA_IF_RX_CONTEXT_STASH;
++
++		/*Create a channel and associate given queue with the channel*/
++		qman_alloc_pool_range((u32 *)&rxq->ch_id, 1, 1, 0);
++		opts.we_mask = opts.we_mask | QM_INITFQ_WE_DESTWQ;
++		opts.fqd.dest.channel = rxq->ch_id;
++		opts.fqd.dest.wq = DPAA_IF_RX_PRIORITY;
++		flags = QMAN_INITFQ_FLAG_SCHED;
++
++		/* Configure tail drop */
++		if (dpaa_intf->cgr_rx) {
++			opts.we_mask |= QM_INITFQ_WE_CGID;
++			opts.fqd.cgid = dpaa_intf->cgr_rx[queue_idx].cgrid;
++			opts.fqd.fq_ctrl |= QM_FQCTRL_CGE;
++		}
++		ret = qman_init_fq(rxq, flags, &opts);
++		if (ret)
++			DPAA_PMD_ERR("Channel/Queue association failed. fqid %d"
++				     " ret: %d", rxq->fqid, ret);
++		rxq->cb.dqrr_dpdk_cb = dpaa_rx_cb;
++		rxq->is_static = true;
++	}
+ 	dev->data->rx_queues[queue_idx] = rxq;
+ 
+ 	/* configure the CGR size as per the desc size */
+ 	if (dpaa_intf->cgr_rx) {
+ 		struct qm_mcc_initcgr cgr_opts = {0};
+-		int ret;
+ 
+ 		/* Enable tail drop with cgr on this queue */
+ 		qm_cgr_cs_thres_set64(&cgr_opts.cgr.cs_thres, nb_desc, 0);
+@@ -835,11 +878,8 @@ static int dpaa_rx_queue_init(struct qman_fq *fq, struct qman_cgr *cgr_rx,
+ 			fqid, ret);
+ 		return ret;
+ 	}
+-
+-	opts.we_mask = QM_INITFQ_WE_DESTWQ | QM_INITFQ_WE_FQCTRL |
+-		       QM_INITFQ_WE_CONTEXTA;
+-
+-	opts.fqd.dest.wq = DPAA_IF_RX_PRIORITY;
++	fq->is_static = false;
++	opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_CONTEXTA;
+ 	opts.fqd.fq_ctrl = QM_FQCTRL_AVOIDBLOCK | QM_FQCTRL_CTXASTASHING |
+ 			   QM_FQCTRL_PREFERINCACHE;
+ 	opts.fqd.context_a.stashing.exclusive = 0;
+@@ -973,6 +1013,16 @@ dpaa_dev_init(struct rte_eth_dev *eth_dev)
+ 	else
+ 		num_rx_fqs = DPAA_DEFAULT_NUM_PCD_QUEUES;
+ 
++	/* if push mode queues to be enabled. Currenly we are allowing only
++	 * one queue per thread.
++	 */
++	if (getenv("DPAA_PUSH_QUEUES_NUMBER")) {
++		dpaa_push_mode_max_queue =
++				atoi(getenv("DPAA_PUSH_QUEUES_NUMBER"));
++		if (dpaa_push_mode_max_queue > DPAA_MAX_PUSH_MODE_QUEUE)
++			dpaa_push_mode_max_queue = DPAA_MAX_PUSH_MODE_QUEUE;
++	}
++
+ 	/* Each device can not have more than DPAA_PCD_FQID_MULTIPLIER RX
+ 	 * queues.
+ 	 */
+diff --git a/drivers/net/dpaa/dpaa_ethdev.h b/drivers/net/dpaa/dpaa_ethdev.h
+index 95d745ee068a..c0a84309ce38 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.h
++++ b/drivers/net/dpaa/dpaa_ethdev.h
+@@ -80,7 +80,7 @@
+ #define DPAA_MAX_NUM_PCD_QUEUES		32
+ 
+ #define DPAA_IF_TX_PRIORITY		3
+-#define DPAA_IF_RX_PRIORITY		4
++#define DPAA_IF_RX_PRIORITY		0
+ #define DPAA_IF_DEBUG_PRIORITY		7
+ 
+ #define DPAA_IF_RX_ANNOTATION_STASH	1
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 2609953957f2..088fbe1217d5 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -420,6 +420,37 @@ dpaa_eth_fd_to_mbuf(const struct qm_fd *fd, uint32_t ifid)
+ 	return mbuf;
+ }
+ 
++enum qman_cb_dqrr_result dpaa_rx_cb(void *event __always_unused,
++				    struct qman_portal *qm __always_unused,
++				    struct qman_fq *fq,
++				    const struct qm_dqrr_entry *dqrr,
++				    void **bufs)
++{
++	const struct qm_fd *fd = &dqrr->fd;
++
++	*bufs = dpaa_eth_fd_to_mbuf(fd,
++			((struct dpaa_if *)fq->dpaa_intf)->ifid);
++	return qman_cb_dqrr_consume;
++}
++
++static uint16_t
++dpaa_eth_queue_portal_rx(struct qman_fq *fq,
++			 struct rte_mbuf **bufs,
++			 uint16_t nb_bufs)
++{
++	int ret;
++
++	if (unlikely(fq->qp == NULL)) {
++		ret = rte_dpaa_portal_fq_init((void *)0, fq);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal %d", ret);
++			return 0;
++		}
++	}
++
++	return qman_portal_poll_rx(nb_bufs, (void **)bufs, fq->qp);
++}
++
+ uint16_t dpaa_eth_queue_rx(void *q,
+ 			   struct rte_mbuf **bufs,
+ 			   uint16_t nb_bufs)
+@@ -429,6 +460,9 @@ uint16_t dpaa_eth_queue_rx(void *q,
+ 	uint32_t num_rx = 0, ifid = ((struct dpaa_if *)fq->dpaa_intf)->ifid;
+ 	int ret;
+ 
++	if (likely(fq->is_static))
++		return dpaa_eth_queue_portal_rx(fq, bufs, nb_bufs);
++
+ 	ret = rte_dpaa_portal_init((void *)0);
+ 	if (ret) {
+ 		DPAA_PMD_ERR("Failure in affining portal");
+diff --git a/drivers/net/dpaa/dpaa_rxtx.h b/drivers/net/dpaa/dpaa_rxtx.h
+index b434b6d140eb..de65ebcbad6f 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.h
++++ b/drivers/net/dpaa/dpaa_rxtx.h
+@@ -294,4 +294,9 @@ int dpaa_eth_mbuf_to_sg_fd(struct rte_mbuf *mbuf,
+ 			   struct qm_fd *fd,
+ 			   uint32_t bpid);
+ 
++enum qman_cb_dqrr_result dpaa_rx_cb(void *event,
++				    struct qman_portal *qm,
++				    struct qman_fq *fq,
++				    const struct qm_dqrr_entry *dqrr,
++				    void **bd);
+ #endif
+-- 
+2.14.3
+

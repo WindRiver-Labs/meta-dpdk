@@ -1,0 +1,73 @@
+From 6e899e192453f1b0a995807232faac99eebfc62f Mon Sep 17 00:00:00 2001
+From: Ashish Jain <ashish.jain@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:22 +0530
+Subject: [PATCH 008/166] net/dpaa2: align the frame size in MTU set
+
+Setting correct frame size in dpaa2_dev_mtu_set
+api call. Also correcting the correct max frame size
+setting in hardware while dev_configure for jumbo frames
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h |  4 ++--
+ drivers/net/dpaa2/dpaa2_ethdev.c        | 11 +++++++----
+ 2 files changed, 9 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index a432b6fc8c8c..9f9ce0bd8587 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -53,8 +53,8 @@
+ #define SVR_LS2088A             0x87090000
+ #define SVR_LX2160A             0x87360000
+ 
+-#ifndef ETH_VLAN_HLEN
+-#define ETH_VLAN_HLEN   4 /** < Vlan Header Length */
++#ifndef VLAN_TAG_SIZE
++#define VLAN_TAG_SIZE   4 /** < Vlan Header Length */
+ #endif
+ 
+ #define MAX_TX_RING_SLOTS	8
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 3e89d8d0bada..894c60e677d9 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -347,8 +347,8 @@ dpaa2_eth_dev_configure(struct rte_eth_dev *dev)
+ 
+ 	if (eth_conf->rxmode.jumbo_frame == 1) {
+ 		if (eth_conf->rxmode.max_rx_pkt_len <= DPAA2_MAX_RX_PKT_LEN) {
+-			ret = dpaa2_dev_mtu_set(dev,
+-					eth_conf->rxmode.max_rx_pkt_len);
++			ret = dpni_set_max_frame_length(dpni, CMD_PRI_LOW,
++				priv->token, eth_conf->rxmode.max_rx_pkt_len);
+ 			if (ret) {
+ 				PMD_INIT_LOG(ERR,
+ 					     "unable to set mtu. check config\n");
+@@ -1000,7 +1000,8 @@ dpaa2_dev_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
+ 	int ret;
+ 	struct dpaa2_dev_priv *priv = dev->data->dev_private;
+ 	struct fsl_mc_io *dpni = (struct fsl_mc_io *)priv->hw;
+-	uint32_t frame_size = mtu + ETHER_HDR_LEN + ETHER_CRC_LEN;
++	uint32_t frame_size = mtu + ETHER_HDR_LEN + ETHER_CRC_LEN
++				+ VLAN_TAG_SIZE;
+ 
+ 	PMD_INIT_FUNC_TRACE();
+ 
+@@ -1018,11 +1019,13 @@ dpaa2_dev_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
+ 	else
+ 		dev->data->dev_conf.rxmode.jumbo_frame = 0;
+ 
++	dev->data->dev_conf.rxmode.max_rx_pkt_len = frame_size;
++
+ 	/* Set the Max Rx frame length as 'mtu' +
+ 	 * Maximum Ethernet header length
+ 	 */
+ 	ret = dpni_set_max_frame_length(dpni, CMD_PRI_LOW, priv->token,
+-					mtu + ETH_VLAN_HLEN);
++					frame_size);
+ 	if (ret) {
+ 		PMD_DRV_LOG(ERR, "setting the max frame length failed");
+ 		return -1;
+-- 
+2.14.3
+

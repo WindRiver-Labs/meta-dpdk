@@ -1,0 +1,56 @@
+From 23ac1986bba4abcf3b163d94b24b07b574e0644f Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Thu, 22 Feb 2018 18:51:37 +0530
+Subject: [PATCH 158/166] dpaa/event: rearranging of atomic queue support code
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+---
+ drivers/net/dpaa/dpaa_rxtx.c | 25 +++++++++++++------------
+ 1 file changed, 13 insertions(+), 12 deletions(-)
+
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 1e7ea62c9ee6..914f7d40e6ee 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -889,6 +889,19 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 					(mbuf->data_off & 0xF) != 0x0)
+ 				realloc_mbuf = 1;
+ 
++			seqn = mbuf->seqn;
++			if (seqn != DPAA_INVALID_MBUF_SEQN) {
++				index = seqn - 1;
++				if (DPAA_PER_LCORE_DQRR_HELD & (1 << index)) {
++					flags[loop] =
++					   ((index & QM_EQCR_DCA_IDXMASK) << 8);
++					flags[loop] |= QMAN_ENQUEUE_FLAG_DCA;
++					DPAA_PER_LCORE_DQRR_SIZE--;
++					DPAA_PER_LCORE_DQRR_HELD &=
++								~(1 << index);
++				}
++			}
++
+ 			if (likely(RTE_MBUF_DIRECT(mbuf))) {
+ 				mp = mbuf->pool;
+ 				bp_info = DPAA_MEMPOOL_TO_POOL_INFO(mp);
+@@ -938,18 +951,6 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 					goto send_pkts;
+ 				}
+ 			}
+-			seqn = mbuf->seqn;
+-			if (seqn != DPAA_INVALID_MBUF_SEQN) {
+-				index = seqn - 1;
+-				if (DPAA_PER_LCORE_DQRR_HELD & (1 << index)) {
+-					flags[loop] =
+-					   ((index & QM_EQCR_DCA_IDXMASK) << 8);
+-					flags[loop] |= QMAN_ENQUEUE_FLAG_DCA;
+-					DPAA_PER_LCORE_DQRR_SIZE--;
+-					DPAA_PER_LCORE_DQRR_HELD &=
+-								~(1 << index);
+-				}
+-			}
+ 		}
+ 
+ send_pkts:
+-- 
+2.14.3
+

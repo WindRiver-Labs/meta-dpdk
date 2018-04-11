@@ -1,0 +1,82 @@
+From 33b5f119317500325731c9b32a56419556a18d39 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 18 Jan 2018 11:43:00 +0530
+Subject: [PATCH 066/166] kni: set initial value for MTU
+
+Configure initial application provided  mtu on the KNI interface.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ examples/kni/main.c                                           | 2 ++
+ lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h | 1 +
+ lib/librte_eal/linuxapp/kni/kni_misc.c                        | 3 +++
+ lib/librte_kni/rte_kni.c                                      | 1 +
+ lib/librte_kni/rte_kni.h                                      | 1 +
+ 5 files changed, 8 insertions(+)
+
+diff --git a/examples/kni/main.c b/examples/kni/main.c
+index 1c251c214cc2..d9c9fa5ff0b9 100644
+--- a/examples/kni/main.c
++++ b/examples/kni/main.c
+@@ -845,6 +845,8 @@ kni_alloc(uint16_t port_id)
+ 			rte_eth_macaddr_get(port_id,
+ 					(struct ether_addr *)&conf.mac_addr);
+ 
++			rte_eth_dev_get_mtu(port_id, &conf.mtu);
++
+ 			memset(&ops, 0, sizeof(ops));
+ 			ops.port_id = port_id;
+ 			ops.change_mtu = kni_change_mtu;
+diff --git a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+index d9d332c4bd67..83dbee440aba 100644
+--- a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
++++ b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+@@ -173,6 +173,7 @@ struct rte_kni_device_info {
+ 
+ 	/* mbuf size */
+ 	unsigned mbuf_size;
++	unsigned int mtu;
+ 	char mac_addr[6];
+ };
+ 
+diff --git a/lib/librte_eal/linuxapp/kni/kni_misc.c b/lib/librte_eal/linuxapp/kni/kni_misc.c
+index b524d30cb3e6..0ccd2279a8d2 100644
+--- a/lib/librte_eal/linuxapp/kni/kni_misc.c
++++ b/lib/librte_eal/linuxapp/kni/kni_misc.c
+@@ -470,6 +470,9 @@ kni_ioctl_create(struct net *net, uint32_t ioctl_num,
+ 			random_ether_addr(net_dev->dev_addr);
+ 	}
+ 
++	if (dev_info.mtu)
++		net_dev->mtu = dev_info.mtu;
++
+ 	ret = register_netdev(net_dev);
+ 	if (ret) {
+ 		pr_err("error %i registering device \"%s\"\n",
+diff --git a/lib/librte_kni/rte_kni.c b/lib/librte_kni/rte_kni.c
+index e66e23bf1bab..2a6607cc761d 100644
+--- a/lib/librte_kni/rte_kni.c
++++ b/lib/librte_kni/rte_kni.c
+@@ -369,6 +369,7 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
+ 	dev_info.force_bind = conf->force_bind;
+ 	dev_info.group_id = conf->group_id;
+ 	dev_info.mbuf_size = conf->mbuf_size;
++	dev_info.mtu = conf->mtu;
+ 
+ 	memcpy(dev_info.mac_addr, conf->mac_addr, ETHER_ADDR_LEN);
+ 
+diff --git a/lib/librte_kni/rte_kni.h b/lib/librte_kni/rte_kni.h
+index 4530bdd94b65..cbf3188dcd74 100644
+--- a/lib/librte_kni/rte_kni.h
++++ b/lib/librte_kni/rte_kni.h
+@@ -98,6 +98,7 @@ struct rte_kni_conf {
+ 	__extension__
+ 	uint8_t force_bind : 1; /* Flag to bind kernel thread */
+ 	char mac_addr[ETHER_ADDR_LEN]; /* MAC address assigned to KNI */
++	uint16_t mtu;
+ };
+ 
+ /**
+-- 
+2.14.3
+

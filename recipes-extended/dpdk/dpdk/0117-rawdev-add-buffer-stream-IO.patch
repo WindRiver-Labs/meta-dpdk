@@ -1,0 +1,225 @@
+From cceafe64941b55a88b2a14e2c49c94e3aa628b4c Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Wed, 31 Jan 2018 14:43:11 +0530
+Subject: [PATCH 117/166] rawdev: add buffer stream IO
+
+Introduce handlers for raw buffer enqueue and dequeue. A raw buffer
+is essentially a void object which is transparently passed via the
+library onto the driver.
+
+Using a context field as argument, any arbitrary meta information
+can be passed by application to the driver/implementation. This can
+be any data on which driver needs to define the operation semantics.
+For example, passing along a queue identifier can suggest the driver
+the queue context to perform I/O on.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ lib/librte_rawdev/rte_rawdev.c           | 30 +++++++++++++++++
+ lib/librte_rawdev/rte_rawdev.h           | 58 ++++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_pmd.h       | 58 ++++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_version.map |  2 ++
+ 4 files changed, 148 insertions(+)
+
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+index da6860f545c2..2fd30d19fff4 100644
+--- a/lib/librte_rawdev/rte_rawdev.c
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -203,6 +203,36 @@ rte_rawdev_set_attr(uint16_t dev_id,
+ 	return (*dev->dev_ops->attr_set)(dev, attr_name, attr_value);
+ }
+ 
++int
++rte_rawdev_enqueue_buffers(uint16_t dev_id,
++			   struct rte_rawdev_buf **buffers,
++			   unsigned int count,
++			   rte_rawdev_obj_t context)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->enqueue_bufs, -ENOTSUP);
++	return (*dev->dev_ops->enqueue_bufs)(dev, buffers, count, context);
++}
++
++int
++rte_rawdev_dequeue_buffers(uint16_t dev_id,
++			   struct rte_rawdev_buf **buffers,
++			   unsigned int count,
++			   rte_rawdev_obj_t context)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->dequeue_bufs, -ENOTSUP);
++	return (*dev->dev_ops->dequeue_bufs)(dev, buffers, count, context);
++}
++
+ int
+ rte_rawdev_dump(uint16_t dev_id, FILE *f)
+ {
+diff --git a/lib/librte_rawdev/rte_rawdev.h b/lib/librte_rawdev/rte_rawdev.h
+index 4617373f193e..8e1e37bcf3e9 100644
+--- a/lib/librte_rawdev/rte_rawdev.h
++++ b/lib/librte_rawdev/rte_rawdev.h
+@@ -362,6 +362,64 @@ rte_rawdev_set_attr(uint16_t dev_id,
+ 		    const char *attr_name,
+ 		    const uint64_t attr_value);
+ 
++/**
++ * Enqueue a stream of buffers to the device.
++ *
++ * Rather than specifying a queue, this API passes along an opaque object
++ * to the driver implementation. That object can be a queue or any other
++ * contextual information necessary for the device to enqueue buffers.
++ *
++ * @param dev_id
++ *   The identifier of the device to configure.
++ * @param buffers
++ *   Collection of buffers for enqueueing
++ * @param count
++ *   Count of buffers to enqueue
++ * @param context
++ *   Opaque context information.
++ * @return
++ *   >=0 for buffers enqueued
++ *  !0 for failure.
++ *  Whether partial enqueue is failure or success is defined between app
++ *  and driver implementation.
++ */
++int
++rte_rawdev_enqueue_buffers(uint16_t dev_id,
++			   struct rte_rawdev_buf **buffers,
++			   unsigned int count,
++			   rte_rawdev_obj_t context);
++
++/**
++ * Dequeue a stream of buffers from the device.
++ *
++ * Rather than specifying a queue, this API passes along an opaque object
++ * to the driver implementation. That object can be a queue or any other
++ * contextual information necessary for the device to dequeue buffers.
++ *
++ * Application should have allocated enough space to store `count` response
++ * buffers.
++ * Releasing buffers dequeued is responsibility of the application.
++ *
++ * @param dev_id
++ *   The identifier of the device to configure.
++ * @param buffers
++ *   Collection of buffers dequeued
++ * @param count
++ *   Max buffers expected to be dequeued
++ * @param context
++ *   Opaque context information.
++ * @return
++ *   >=0 for buffers dequeued
++ *  !0 for failure.
++ *  Whether partial enqueue is failure or success is defined between app
++ *  and driver implementation.
++ */
++int
++rte_rawdev_dequeue_buffers(uint16_t dev_id,
++			   struct rte_rawdev_buf **buffers,
++			   unsigned int count,
++			   rte_rawdev_obj_t context);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/librte_rawdev/rte_rawdev_pmd.h b/lib/librte_rawdev/rte_rawdev_pmd.h
+index f05f4c9f8477..cb890bfc6de4 100644
+--- a/lib/librte_rawdev/rte_rawdev_pmd.h
++++ b/lib/librte_rawdev/rte_rawdev_pmd.h
+@@ -250,6 +250,58 @@ typedef int (*rawdev_queue_setup_t)(struct rte_rawdev *dev,
+ typedef int (*rawdev_queue_release_t)(struct rte_rawdev *dev,
+ 				      uint16_t queue_id);
+ 
++/**
++ * Enqueue an array of raw buffers to the device.
++ *
++ * Buffer being used is opaque - it can be obtained from mempool or from
++ * any other source. Interpretation of buffer is responsibility of driver.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param bufs
++ *   array of buffers
++ * @param count
++ *   number of buffers passed
++ * @param context
++ *   an opaque object representing context of the call; for example, an
++ *   application can pass information about the queues on which enqueue needs
++ *   to be done. Or, the enqueue operation might be passed reference to an
++ *   object containing a callback (agreed upon between applicatio and driver).
++ *
++ * @return
++ *   >=0 Count of buffers successfully enqueued (0: no buffers enqueued)
++ *   <0 Error count in case of error
++ */
++typedef int (*rawdev_enqueue_bufs_t)(struct rte_rawdev *dev,
++				     struct rte_rawdev_buf **buffers,
++				     unsigned int count,
++				     rte_rawdev_obj_t context);
++
++/**
++ * Dequeue an array of raw buffers from the device.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param bufs
++ *   array of buffers
++ * @param count
++ *   Max buffers expected to be dequeued
++ * @param context
++ *   an opaque object representing context of the call. Based on this object,
++ *   the application and driver can coordinate for dequeue operation involving
++ *   agreed upon semantics. For example, queue information/id on which Dequeue
++ *   needs to be performed.
++ * @return
++ *   >0, ~0: Count of buffers returned
++ *   <0: Error
++ *   Whether short dequeue is success or failure is decided between app and
++ *   driver.
++ */
++typedef int (*rawdev_dequeue_bufs_t)(struct rte_rawdev *dev,
++				     struct rte_rawdev_buf **buffers,
++				     unsigned int count,
++				     rte_rawdev_obj_t context);
++
+ /**
+  * Dump internal information
+  *
+@@ -323,6 +375,12 @@ struct rte_rawdev_ops {
+ 	/**< Release an raw queue. */
+ 	rawdev_queue_release_t queue_release;
+ 
++	/**< Enqueue an array of raw buffers to device. */
++	rawdev_enqueue_bufs_t enqueue_bufs;
++	/**< Dequeue an array of raw buffers from device. */
++	/** TODO: Callback based enqueue and dequeue support */
++	rawdev_dequeue_bufs_t dequeue_bufs;
++
+ 	/* Dump internal information */
+ 	rawdev_dump_t dump;
+ 
+diff --git a/lib/librte_rawdev/rte_rawdev_version.map b/lib/librte_rawdev/rte_rawdev_version.map
+index d63476e47291..bafe2c5dee01 100644
+--- a/lib/librte_rawdev/rte_rawdev_version.map
++++ b/lib/librte_rawdev/rte_rawdev_version.map
+@@ -4,6 +4,8 @@ EXPERIMENTAL {
+ 	rte_rawdev_close;
+ 	rte_rawdev_configure;
+ 	rte_rawdev_count;
++	rte_rawdev_dequeue_buffers;
++	rte_rawdev_enqueue_buffers;
+ 	rte_rawdev_get_attr;
+ 	rte_rawdev_get_dev_id;
+ 	rte_rawdev_info_get;
+-- 
+2.14.3
+

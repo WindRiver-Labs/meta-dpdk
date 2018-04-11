@@ -1,0 +1,72 @@
+From 0dea065b42e3692d0689666cc7bef6e3dace0a37 Mon Sep 17 00:00:00 2001
+From: Liang Ma <liang.j.ma@intel.com>
+Date: Tue, 9 Jan 2018 14:18:56 +0000
+Subject: [PATCH 001/166] eventdev: extend the eventdev capability flags
+
+add new capability flags to express the opdl PMD limitations.
+
+RTE_EVENT_DEV_CAP_NONSEQ_MODE
+
+Event device is capable of operating in none sequential mode. The path
+of the event is not necessary to be sequential. Application can change
+the path of event at runtime. If the flag is not set, then event each event
+will follow a path from queue 0 to queue 1 to queue 2 etc. If the flag is
+set, events may be sent to queues in any order. If the flag is not set, the
+eventdev will return an error when the application enqueues an event for a
+qid which is not the next in the sequence.
+
+RTE_EVENT_DEV_CAP_RUNTIME_PORT_LINK
+
+Event device is capable of configuring the queue/port link at runtime.
+If the flag is not set, the eventdev queue/port link is only can be
+configured during  initialization.
+
+RTE_EVENT_DEV_CAP_MULTIPLE_QUEUE_PORT
+
+Event device is capable of setting up the link between multiple queue
+with single port. If the flag is not set, the eventdev can only map a
+single queue to each port or map a single queue to many port.
+
+Signed-off-by: Liang Ma <liang.j.ma@intel.com>
+Signed-off-by: Peter Mccarthy <peter.mccarthy@intel.com>
+Acked-by: Jerin Jacob <jerin.jacob@caviumnetworks.com>
+---
+ lib/librte_eventdev/rte_eventdev.h | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/lib/librte_eventdev/rte_eventdev.h b/lib/librte_eventdev/rte_eventdev.h
+index eb1024d95acf..daf60a928593 100644
+--- a/lib/librte_eventdev/rte_eventdev.h
++++ b/lib/librte_eventdev/rte_eventdev.h
+@@ -284,6 +284,28 @@ struct rte_mbuf; /* we just use mbuf pointers; no need to include rte_mbuf.h */
+  * @see rte_event_dequeue_burst() rte_event_enqueue_burst()
+  */
+ 
++#define RTE_EVENT_DEV_CAP_NONSEQ_MODE         (1ULL << 6)
++/**< Event device is capable of operating in none sequential mode. The path
++ * of the event is not necessary to be sequential. Application can change
++ * the path of event at runtime. If the flag is not set, then event each event
++ * will follow a path from queue 0 to queue 1 to queue 2 etc. If the flag is
++ * set, events may be sent to queues in any order. If the flag is not set, the
++ * eventdev will return an error when the application enqueues an event for a
++ * qid which is not the next in the sequence.
++ */
++
++#define RTE_EVENT_DEV_CAP_RUNTIME_PORT_LINK   (1ULL << 7)
++/**< Event device is capable of configuring the queue/port link at runtime.
++ * If the flag is not set, the eventdev queue/port link is only can be
++ * configured during  initialization.
++ */
++
++#define RTE_EVENT_DEV_CAP_MULTIPLE_QUEUE_PORT (1ULL << 8)
++/**< Event device is capable of setting up the link between multiple queue
++ * with single port. If the flag is not set, the eventdev can only map a
++ * single queue to each port or map a single queue to many port.
++ */
++
+ /* Event device priority levels */
+ #define RTE_EVENT_DEV_PRIORITY_HIGHEST   0
+ /**< Highest priority expressed across eventdev subsystem
+-- 
+2.14.3
+

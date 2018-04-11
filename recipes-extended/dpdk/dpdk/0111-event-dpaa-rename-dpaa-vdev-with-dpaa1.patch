@@ -1,0 +1,32 @@
+From c926661e8c5b264cfbce90f6917dd332d7242cd7 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 5 Feb 2018 15:44:45 +0530
+Subject: [PATCH 111/166] event/dpaa: rename dpaa vdev with dpaa1
+
+DPAA2 eventdev is named as event_dpaa2 which conflicts with
+event_dpaa when both are compiled in together. So event_dpaa
+is required to renamed.
+
+Fixes: 1ee9569576f6 ("config: enable dpaaX drivers for generic ARMv8")
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/event/dpaa/dpaa_eventdev.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/event/dpaa/dpaa_eventdev.h b/drivers/event/dpaa/dpaa_eventdev.h
+index 153f38d9e9ec..918fe35ce91d 100644
+--- a/drivers/event/dpaa/dpaa_eventdev.h
++++ b/drivers/event/dpaa/dpaa_eventdev.h
+@@ -10,7 +10,7 @@
+ #include <rte_atomic.h>
+ #include <rte_per_lcore.h>
+ 
+-#define EVENTDEV_NAME_DPAA_PMD		event_dpaa
++#define EVENTDEV_NAME_DPAA_PMD		event_dpaa1
+ 
+ #define EVENTDEV_DRV_LOG(fmt, args...)	\
+ 		DPAA_EVENTDEV_INFO(fmt, ## args)
+-- 
+2.14.3
+

@@ -1,0 +1,36 @@
+From 4bc14fb7bd305862fb9e4ce288e46bc349d079ab Mon Sep 17 00:00:00 2001
+From: Jerin Jacob <jerin.jacob@caviumnetworks.com>
+Date: Sat, 10 Feb 2018 17:27:36 +0530
+Subject: [PATCH 150/166] net/dpaa2: remove unused global variable
+
+Due to the missing __packed definition, compiler treating
+it as as global variable.
+
+grep "Allocating common symbols" -A 100 build/app/testacl.map
+__packed   0x8  /build/lib/librte_pmd_dpaa2.a(dpaa2_rxtx.o)
+
+Fixes: a5fc38d422a7 ("net/dpaa2: support Rx packet parsing")
+Cc: stable@dpdk.org
+
+Signed-off-by: Jerin Jacob <jerin.jacob@caviumnetworks.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+index c13336a2b3cf..f15d85c6b4bb 100644
+--- a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
++++ b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+@@ -63,7 +63,7 @@ struct dpaa2_fas {
+ 	uint8_t ppid;
+ 	__le16 ifpid;
+ 	__le32 status;
+-} __packed;
++}  __attribute__((__packed__));
+ 
+ /**
+  * HW Packet Annotation  Register structures
+-- 
+2.14.3
+

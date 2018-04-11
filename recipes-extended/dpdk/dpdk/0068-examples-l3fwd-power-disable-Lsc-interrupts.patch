@@ -1,0 +1,29 @@
+From 73611c334523014dd7b148c8080f543e5fd0849f Mon Sep 17 00:00:00 2001
+From: Nikhil Agarwal <nikhil.agarwal@linaro.org>
+Date: Tue, 12 Dec 2017 15:38:26 +0530
+Subject: [PATCH 068/166] examples/l3fwd-power: disable Lsc interrupts
+
+This application does not need Link Status Interrupt.
+It will cause failure for the platforms not supporting LSC.
+
+Signed-off-by: Nikhil Agarwal <nikhil.agarwal@linaro.org>
+Acked-by: David Hunt <david.hunt@intel.com>
+---
+ examples/l3fwd-power/main.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/examples/l3fwd-power/main.c b/examples/l3fwd-power/main.c
+index 4ddd04c6ea50..d80f6631b92c 100644
+--- a/examples/l3fwd-power/main.c
++++ b/examples/l3fwd-power/main.c
+@@ -229,7 +229,6 @@ static struct rte_eth_conf port_conf = {
+ 		.mq_mode = ETH_MQ_TX_NONE,
+ 	},
+ 	.intr_conf = {
+-		.lsc = 1,
+ 		.rxq = 1,
+ 	},
+ };
+-- 
+2.14.3
+

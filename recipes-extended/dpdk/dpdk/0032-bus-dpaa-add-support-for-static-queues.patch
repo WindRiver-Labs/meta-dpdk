@@ -1,0 +1,180 @@
+From e18ccc96251cb62a9bde64dd0987c6921ba18b49 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 26 Oct 2017 23:23:28 +0530
+Subject: [PATCH 032/166] bus/dpaa: add support for static queues
+
+DPAA hardware support two kinds of queues:
+1. Pull mode queue - where one needs to regularly pull the packets.
+2. Push mode queue - where the hw pushes the packet to queue. These are
+   high performance queues, but limited in number.
+
+This patch add the driver support for push mode queues.
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c        | 64 +++++++++++++++++++++++++++++++
+ drivers/bus/dpaa/base/qbman/qman.h        |  4 +-
+ drivers/bus/dpaa/include/fsl_qman.h       | 14 ++++++-
+ drivers/bus/dpaa/rte_bus_dpaa_version.map |  4 ++
+ 4 files changed, 83 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index d9fdd0fcf86f..905952fdd8ef 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -1084,6 +1084,70 @@ u16 qman_affine_channel(int cpu)
+ 	return affine_channels[cpu];
+ }
+ 
++unsigned int qman_portal_poll_rx(unsigned int poll_limit,
++				 void **bufs,
++				 struct qman_portal *p)
++{
++	const struct qm_dqrr_entry *dq;
++	struct qman_fq *fq;
++	enum qman_cb_dqrr_result res;
++	unsigned int limit = 0;
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++	struct qm_dqrr_entry *shadow;
++#endif
++	unsigned int rx_number = 0;
++
++	do {
++		qm_dqrr_pvb_update(&p->p);
++		dq = qm_dqrr_current(&p->p);
++		if (unlikely(!dq))
++			break;
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++	/* If running on an LE system the fields of the
++	 * dequeue entry must be swapper.  Because the
++	 * QMan HW will ignore writes the DQRR entry is
++	 * copied and the index stored within the copy
++	 */
++		shadow = &p->shadow_dqrr[DQRR_PTR2IDX(dq)];
++		*shadow = *dq;
++		dq = shadow;
++		shadow->fqid = be32_to_cpu(shadow->fqid);
++		shadow->contextB = be32_to_cpu(shadow->contextB);
++		shadow->seqnum = be16_to_cpu(shadow->seqnum);
++		hw_fd_to_cpu(&shadow->fd);
++#endif
++
++		/* SDQCR: context_b points to the FQ */
++#ifdef CONFIG_FSL_QMAN_FQ_LOOKUP
++		fq = get_fq_table_entry(dq->contextB);
++#else
++		fq = (void *)(uintptr_t)dq->contextB;
++#endif
++		/* Now let the callback do its stuff */
++		res = fq->cb.dqrr_dpdk_cb(NULL, p, fq, dq, &bufs[rx_number]);
++		rx_number++;
++		/* Interpret 'dq' from a driver perspective. */
++		/*
++		 * Parking isn't possible unless HELDACTIVE was set. NB,
++		 * FORCEELIGIBLE implies HELDACTIVE, so we only need to
++		 * check for HELDACTIVE to cover both.
++		 */
++		DPAA_ASSERT((dq->stat & QM_DQRR_STAT_FQ_HELDACTIVE) ||
++			    (res != qman_cb_dqrr_park));
++		qm_dqrr_cdc_consume_1ptr(&p->p, dq, res == qman_cb_dqrr_park);
++		/* Move forward */
++		qm_dqrr_next(&p->p);
++		/*
++		 * Entry processed and consumed, increment our counter.  The
++		 * callback can request that we exit after consuming the
++		 * entry, and we also exit if we reach our processing limit,
++		 * so loop back only if neither of these conditions is met.
++		 */
++	} while (likely(++limit < poll_limit));
++
++	return limit;
++}
++
+ struct qm_dqrr_entry *qman_dequeue(struct qman_fq *fq)
+ {
+ 	struct qman_portal *p = get_affine_portal();
+diff --git a/drivers/bus/dpaa/base/qbman/qman.h b/drivers/bus/dpaa/base/qbman/qman.h
+index 283cd31f35b0..37b73dfff817 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.h
++++ b/drivers/bus/dpaa/base/qbman/qman.h
+@@ -187,7 +187,7 @@ struct qm_eqcr {
+ };
+ 
+ struct qm_dqrr {
+-	const struct qm_dqrr_entry *ring, *cursor;
++	struct qm_dqrr_entry *ring, *cursor;
+ 	u8 pi, ci, fill, ithresh, vbit;
+ #ifdef RTE_LIBRTE_DPAA_HWDEBUG
+ 	enum qm_dqrr_dmode dmode;
+@@ -474,7 +474,7 @@ static inline u8 DQRR_PTR2IDX(const struct qm_dqrr_entry *e)
+ 	return ((uintptr_t)e >> 6) & (QM_DQRR_SIZE - 1);
+ }
+ 
+-static inline const struct qm_dqrr_entry *DQRR_INC(
++static inline struct qm_dqrr_entry *DQRR_INC(
+ 						const struct qm_dqrr_entry *e)
+ {
+ 	return DQRR_CARRYCLEAR(e + 1);
+diff --git a/drivers/bus/dpaa/include/fsl_qman.h b/drivers/bus/dpaa/include/fsl_qman.h
+index 143e5c533584..8e19f480962d 100644
+--- a/drivers/bus/dpaa/include/fsl_qman.h
++++ b/drivers/bus/dpaa/include/fsl_qman.h
+@@ -1157,6 +1157,12 @@ typedef enum qman_cb_dqrr_result (*qman_cb_dqrr)(struct qman_portal *qm,
+ 					struct qman_fq *fq,
+ 					const struct qm_dqrr_entry *dqrr);
+ 
++typedef enum qman_cb_dqrr_result (*qman_dpdk_cb_dqrr)(void *event,
++					struct qman_portal *qm,
++					struct qman_fq *fq,
++					const struct qm_dqrr_entry *dqrr,
++					void **bd);
++
+ /*
+  * This callback type is used when handling ERNs, FQRNs and FQRLs via MR. They
+  * are always consumed after the callback returns.
+@@ -1215,7 +1221,10 @@ enum qman_fq_state {
+  */
+ 
+ struct qman_fq_cb {
+-	qman_cb_dqrr dqrr;	/* for dequeued frames */
++	union { /* for dequeued frames */
++		qman_dpdk_cb_dqrr dqrr_dpdk_cb;
++		qman_cb_dqrr dqrr;
++	};
+ 	qman_cb_mr ern;		/* for s/w ERNs */
+ 	qman_cb_mr fqs;		/* frame-queue state changes*/
+ };
+@@ -1332,6 +1341,9 @@ int qman_get_portal_index(void);
+  */
+ u16 qman_affine_channel(int cpu);
+ 
++unsigned int qman_portal_poll_rx(unsigned int poll_limit,
++				 void **bufs, struct qman_portal *q);
++
+ /**
+  * qman_set_vdq - Issue a volatile dequeue command
+  * @fq: Frame Queue on which the volatile dequeue command is issued
+diff --git a/drivers/bus/dpaa/rte_bus_dpaa_version.map b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+index 212c75fe22c0..ac455cdd5b0c 100644
+--- a/drivers/bus/dpaa/rte_bus_dpaa_version.map
++++ b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+@@ -70,11 +70,15 @@ DPDK_18.02 {
+ 
+ 	dpaa_svr_family;
+ 	qman_alloc_cgrid_range;
++	qman_alloc_pool_range;
+ 	qman_create_cgr;
+ 	qman_delete_cgr;
+ 	qman_modify_cgr;
++	qman_oos_fq;
++	qman_portal_poll_rx;
+ 	qman_query_fq_frm_cnt;
+ 	qman_release_cgrid_range;
++	qman_retire_fq;
+ 	rte_dpaa_portal_fq_close;
+ 	rte_dpaa_portal_fq_init;
+ 
+-- 
+2.14.3
+

@@ -1,0 +1,43 @@
+From 5112c5577369b2dd969d2fb9f9bf55c5551db9d1 Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Fri, 22 Dec 2017 20:47:14 +0530
+Subject: [PATCH 037/166] config: enabling compilation of DPAA eventdev PMD
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/common_base                       | 3 +++
+ config/defconfig_arm64-dpaa-linuxapp-gcc | 3 +++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/config/common_base b/config/common_base
+index 214d9a27844b..d0fa284ecf3a 100644
+--- a/config/common_base
++++ b/config/common_base
+@@ -331,6 +331,9 @@ CONFIG_RTE_LIBRTE_DPAA_BUS=n
+ CONFIG_RTE_LIBRTE_DPAA_MEMPOOL=n
+ CONFIG_RTE_LIBRTE_DPAA_PMD=n
+ 
++# Compile software NXP DPAA Event Dev PMD
++CONFIG_RTE_LIBRTE_PMD_DPAA_EVENTDEV=n
++
+ #
+ # Compile burst-oriented Cavium OCTEONTX network PMD driver
+ #
+diff --git a/config/defconfig_arm64-dpaa-linuxapp-gcc b/config/defconfig_arm64-dpaa-linuxapp-gcc
+index e577432f41a9..c163f9da3733 100644
+--- a/config/defconfig_arm64-dpaa-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa-linuxapp-gcc
+@@ -58,6 +58,9 @@ CONFIG_RTE_MBUF_DEFAULT_MEMPOOL_OPS="dpaa"
+ # Compile software NXP DPAA PMD
+ CONFIG_RTE_LIBRTE_DPAA_PMD=y
+ 
++# Compile software NXP DPAA Event Dev PMD
++CONFIG_RTE_LIBRTE_PMD_DPAA_EVENTDEV=y
++
+ #
+ # FSL DPAA caam - crypto driver
+ #
+-- 
+2.14.3
+

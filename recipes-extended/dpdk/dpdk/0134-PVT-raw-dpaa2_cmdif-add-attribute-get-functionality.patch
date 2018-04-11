@@ -1,0 +1,50 @@
+From 63bd152171cb91ad2e249c492ae4d9d456fcbc0b Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Thu, 15 Feb 2018 09:09:19 +0530
+Subject: [PATCH 134/166] PVT: raw/dpaa2_cmdif: add attribute get functionality
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+
+diff --git a/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
+index 0d98d366be1d..904448921a90 100644
+--- a/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
++++ b/drivers/raw/dpaa2_cmdif/dpaa2_cmdif.c
+@@ -29,7 +29,32 @@ int dpaa2_cmdif_logtype;
+ /* CMDIF driver object */
+ static struct rte_vdev_driver dpaa2_cmdif_drv;
+ 
++/*
++ * This API provides the DPCI device ID in 'attr_value'.
++ * The device ID shall be passed by GPP to the AIOP using CMDIF commands.
++ */
++static int
++dpaa2_cmdif_get_attr(struct rte_rawdev *dev,
++		     const char *attr_name,
++		     uint64_t *attr_value)
++{
++	struct dpaa2_dpci_dev *cidev = dev->dev_private;
++
++	DPAA2_CMDIF_FUNC_TRACE();
++
++	RTE_SET_USED(attr_name);
++
++	if (!attr_value) {
++		DPAA2_CMDIF_ERR("Invalid arguments for getting attributes");
++		return -EINVAL;
++	}
++	*attr_value = cidev->dpci_id;
++
++	return 0;
++}
++
+ static const struct rte_rawdev_ops dpaa2_cmdif_ops = {
++	.attr_get = dpaa2_cmdif_get_attr,
+ };
+ 
+ static int
+-- 
+2.14.3
+

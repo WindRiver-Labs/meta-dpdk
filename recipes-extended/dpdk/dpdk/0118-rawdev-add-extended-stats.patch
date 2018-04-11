@@ -1,0 +1,329 @@
+From bdba45886841df93540cccfda35eb85112aa18f4 Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Wed, 31 Jan 2018 14:43:12 +0530
+Subject: [PATCH 118/166] rawdev: add extended stats
+
+Generic rawdev library cannot define a pre-defined set of stats
+for devices which are yet to be defined.
+
+This patch introduces the xstats support for rawdev so that any
+implementation can create its own statistics.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ lib/librte_rawdev/rte_rawdev.c           |  75 ++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev.h           | 105 +++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_pmd.h       |  72 +++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_version.map |   4 ++
+ 4 files changed, 256 insertions(+)
+
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+index 2fd30d19fff4..92aeeb150c7e 100644
+--- a/lib/librte_rawdev/rte_rawdev.c
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -245,6 +245,81 @@ rte_rawdev_dump(uint16_t dev_id, FILE *f)
+ 	return (*dev->dev_ops->dump)(dev, f);
+ }
+ 
++static int
++xstats_get_count(uint16_t dev_id)
++{
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->xstats_get_names, -ENOTSUP);
++	return (*dev->dev_ops->xstats_get_names)(dev, NULL, 0);
++}
++
++int
++rte_rawdev_xstats_names_get(uint16_t dev_id,
++		struct rte_rawdev_xstats_name *xstats_names,
++		unsigned int size)
++{
++	const struct rte_rawdev *dev;
++	int cnt_expected_entries;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -ENODEV);
++
++	cnt_expected_entries = xstats_get_count(dev_id);
++
++	if (xstats_names == NULL || cnt_expected_entries < 0 ||
++	    (int)size < cnt_expected_entries || size <= 0)
++		return cnt_expected_entries;
++
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->xstats_get_names, -ENOTSUP);
++	return (*dev->dev_ops->xstats_get_names)(dev, xstats_names, size);
++}
++
++/* retrieve rawdev extended statistics */
++int
++rte_rawdev_xstats_get(uint16_t dev_id,
++		      const unsigned int ids[],
++		      uint64_t values[],
++		      unsigned int n)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -ENODEV);
++	const struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->xstats_get, -ENOTSUP);
++	return (*dev->dev_ops->xstats_get)(dev, ids, values, n);
++}
++
++uint64_t
++rte_rawdev_xstats_by_name_get(uint16_t dev_id,
++			      const char *name,
++			      unsigned int *id)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, 0);
++	const struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++	unsigned int temp = -1;
++
++	if (id != NULL)
++		*id = (unsigned int)-1;
++	else
++		id = &temp; /* driver never gets a NULL value */
++
++	/* implemented by driver */
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->xstats_get_by_name, -ENOTSUP);
++	return (*dev->dev_ops->xstats_get_by_name)(dev, name, id);
++}
++
++int
++rte_rawdev_xstats_reset(uint16_t dev_id,
++			const uint32_t ids[], uint32_t nb_ids)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->xstats_reset, -ENOTSUP);
++	return (*dev->dev_ops->xstats_reset)(dev, ids, nb_ids);
++}
++
+ int
+ rte_rawdev_start(uint16_t dev_id)
+ {
+diff --git a/lib/librte_rawdev/rte_rawdev.h b/lib/librte_rawdev/rte_rawdev.h
+index 8e1e37bcf3e9..2478493244b2 100644
+--- a/lib/librte_rawdev/rte_rawdev.h
++++ b/lib/librte_rawdev/rte_rawdev.h
+@@ -420,6 +420,111 @@ rte_rawdev_dequeue_buffers(uint16_t dev_id,
+ 			   unsigned int count,
+ 			   rte_rawdev_obj_t context);
+ 
++/** Maximum name length for extended statistics counters */
++#define RTE_RAW_DEV_XSTATS_NAME_SIZE 64
++
++/**
++ * A name-key lookup element for extended statistics.
++ *
++ * This structure is used to map between names and ID numbers
++ * for extended ethdev statistics.
++ */
++struct rte_rawdev_xstats_name {
++	char name[RTE_RAW_DEV_XSTATS_NAME_SIZE];
++};
++
++/**
++ * Retrieve names of extended statistics of a raw device.
++ *
++ * @param dev_id
++ *   The identifier of the raw device.
++ * @param[out] xstats_names
++ *   Block of memory to insert names into. Must be at least size in capacity.
++ *   If set to NULL, function returns required capacity.
++ * @param size
++ *   Capacity of xstats_names (number of names).
++ * @return
++ *   - positive value lower or equal to size: success. The return value
++ *     is the number of entries filled in the stats table.
++ *   - positive value higher than size: error, the given statistics table
++ *     is too small. The return value corresponds to the size that should
++ *     be given to succeed. The entries in the table are not valid and
++ *     shall not be used by the caller.
++ *   - negative value on error:
++ *        -ENODEV for invalid *dev_id*
++ *        -ENOTSUP if the device doesn't support this function.
++ */
++int
++rte_rawdev_xstats_names_get(uint16_t dev_id,
++			    struct rte_rawdev_xstats_name *xstats_names,
++			    unsigned int size);
++
++/**
++ * Retrieve extended statistics of a raw device.
++ *
++ * @param dev_id
++ *   The identifier of the device.
++ * @param ids
++ *   The id numbers of the stats to get. The ids can be got from the stat
++ *   position in the stat list from rte_rawdev_get_xstats_names(), or
++ *   by using rte_rawdev_get_xstats_by_name()
++ * @param[out] values
++ *   The values for each stats request by ID.
++ * @param n
++ *   The number of stats requested
++ * @return
++ *   - positive value: number of stat entries filled into the values array
++ *   - negative value on error:
++ *        -ENODEV for invalid *dev_id*
++ *        -ENOTSUP if the device doesn't support this function.
++ */
++int
++rte_rawdev_xstats_get(uint16_t dev_id,
++		      const unsigned int ids[],
++		      uint64_t values[],
++		      unsigned int n);
++
++/**
++ * Retrieve the value of a single stat by requesting it by name.
++ *
++ * @param dev_id
++ *   The identifier of the device
++ * @param name
++ *   The stat name to retrieve
++ * @param[out] id
++ *   If non-NULL, the numerical id of the stat will be returned, so that further
++ *   requests for the stat can be got using rte_rawdev_xstats_get, which will
++ *   be faster as it doesn't need to scan a list of names for the stat.
++ *   If the stat cannot be found, the id returned will be (unsigned)-1.
++ * @return
++ *   - positive value or zero: the stat value
++ *   - negative value: -EINVAL if stat not found, -ENOTSUP if not supported.
++ */
++uint64_t
++rte_rawdev_xstats_by_name_get(uint16_t dev_id,
++			      const char *name,
++			      unsigned int *id);
++
++/**
++ * Reset the values of the xstats of the selected component in the device.
++ *
++ * @param dev_id
++ *   The identifier of the device
++ * @param ids
++ *   Selects specific statistics to be reset. When NULL, all statistics
++ *   will be reset. If non-NULL, must point to array of at least
++ *   *nb_ids* size.
++ * @param nb_ids
++ *   The number of ids available from the *ids* array. Ignored when ids is NULL.
++ * @return
++ *   - zero: successfully reset the statistics to zero
++ *   - negative value: -EINVAL invalid parameters, -ENOTSUP if not supported.
++ */
++int
++rte_rawdev_xstats_reset(uint16_t dev_id,
++			const uint32_t ids[],
++			uint32_t nb_ids);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/librte_rawdev/rte_rawdev_pmd.h b/lib/librte_rawdev/rte_rawdev_pmd.h
+index cb890bfc6de4..570b068f66d5 100644
+--- a/lib/librte_rawdev/rte_rawdev_pmd.h
++++ b/lib/librte_rawdev/rte_rawdev_pmd.h
+@@ -353,6 +353,69 @@ typedef int (*rawdev_set_attr_t)(struct rte_rawdev *dev,
+ 				 const char *attr_name,
+ 				 const uint64_t attr_value);
+ 
++/**
++ * Retrieve a set of statistics from device.
++ * Note: Being a raw device, the stats are specific to the device being
++ * implemented thus represented as xstats.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param ids
++ *   The stat ids to retrieve
++ * @param values
++ *   The returned stat values
++ * @param n
++ *   The number of id values and entries in the values array
++ * @return
++ *   The number of stat values successfully filled into the values array
++ */
++typedef int (*rawdev_xstats_get_t)(const struct rte_rawdev *dev,
++		const unsigned int ids[], uint64_t values[], unsigned int n);
++
++/**
++ * Resets the statistic values in xstats for the device.
++ */
++typedef int (*rawdev_xstats_reset_t)(struct rte_rawdev *dev,
++		const uint32_t ids[],
++		uint32_t nb_ids);
++
++/**
++ * Get names of extended stats of an raw device
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param xstats_names
++ *   Array of name values to be filled in
++ * @param size
++ *   Number of values in the xstats_names array
++ * @return
++ *   When size >= the number of stats, return the number of stat values filled
++ *   into the array.
++ *   When size < the number of available stats, return the number of stats
++ *   values, and do not fill in any data into xstats_names.
++ */
++typedef int (*rawdev_xstats_get_names_t)(const struct rte_rawdev *dev,
++		struct rte_rawdev_xstats_name *xstats_names,
++		unsigned int size);
++
++/**
++ * Get value of one stats and optionally return its id
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param name
++ *   The name of the stat to retrieve
++ * @param id
++ *   Pointer to an unsigned int where we store the stat-id.
++ *   This pointer may be null if the id is not required.
++ * @return
++ *   The value of the stat, or (uint64_t)-1 if the stat is not found.
++ *   If the stat is not found, the id value will be returned as (unsigned)-1,
++ *   if id pointer is non-NULL
++ */
++typedef uint64_t (*rawdev_xstats_get_by_name_t)(const struct rte_rawdev *dev,
++						const char *name,
++						unsigned int *id);
+ /** Rawdevice operations function pointer table */
+ struct rte_rawdev_ops {
+ 	/**< Get device info. */
+@@ -388,6 +451,15 @@ struct rte_rawdev_ops {
+ 	rawdev_get_attr_t attr_get;
+ 	/**< Set an attribute managed by the implementation */
+ 	rawdev_set_attr_t attr_set;
++
++	/**< Get extended device statistics. */
++	rawdev_xstats_get_t xstats_get;
++	/**< Get names of extended stats. */
++	rawdev_xstats_get_names_t xstats_get_names;
++	/**< Get one value by name. */
++	rawdev_xstats_get_by_name_t xstats_get_by_name;
++	/**< Reset the statistics values in xstats. */
++	rawdev_xstats_reset_t xstats_reset;
+ };
+ 
+ /**
+diff --git a/lib/librte_rawdev/rte_rawdev_version.map b/lib/librte_rawdev/rte_rawdev_version.map
+index bafe2c5dee01..469b78d81ead 100644
+--- a/lib/librte_rawdev/rte_rawdev_version.map
++++ b/lib/librte_rawdev/rte_rawdev_version.map
+@@ -19,6 +19,10 @@ EXPERIMENTAL {
+ 	rte_rawdev_socket_id;
+ 	rte_rawdev_start;
+ 	rte_rawdev_stop;
++	rte_rawdev_xstats_by_name_get;
++	rte_rawdev_xstats_get;
++	rte_rawdev_xstats_names_get;
++	rte_rawdev_xstats_reset;
+ 	rte_rawdevs;
+ 
+ 	local: *;
+-- 
+2.14.3
+

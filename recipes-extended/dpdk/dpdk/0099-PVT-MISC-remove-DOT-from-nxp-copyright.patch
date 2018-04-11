@@ -1,0 +1,146 @@
+From 81adb682dde4bc8fd862df16a03ec8082b28ab47 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 19 Jan 2018 11:20:35 +0530
+Subject: [PATCH 099/166] PVT: MISC: remove DOT from nxp copyright
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ doc/guides/prog_guide/rte_security.rst    | 2 +-
+ drivers/bus/Makefile                      | 2 +-
+ drivers/mempool/Makefile                  | 2 +-
+ drivers/mempool/ring/Makefile             | 2 +-
+ drivers/mempool/stack/Makefile            | 2 +-
+ lib/librte_eal/common/eal_common_bus.c    | 2 +-
+ lib/librte_eventdev/rte_eventdev.h        | 2 +-
+ lib/librte_security/rte_security.c        | 2 +-
+ lib/librte_security/rte_security.h        | 2 +-
+ lib/librte_security/rte_security_driver.h | 2 +-
+ 10 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/doc/guides/prog_guide/rte_security.rst b/doc/guides/prog_guide/rte_security.rst
+index 71be036c6607..c9c75e0a5922 100644
+--- a/doc/guides/prog_guide/rte_security.rst
++++ b/doc/guides/prog_guide/rte_security.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2017 NXP.
++    Copyright 2017 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/Makefile b/drivers/bus/Makefile
+index c20beb438781..0170428cf748 100644
+--- a/drivers/bus/Makefile
++++ b/drivers/bus/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/Makefile b/drivers/mempool/Makefile
+index f656c566d2ed..87f35fe71824 100644
+--- a/drivers/mempool/Makefile
++++ b/drivers/mempool/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/ring/Makefile b/drivers/mempool/ring/Makefile
+index a7889b96a183..16704c5509cf 100644
+--- a/drivers/mempool/ring/Makefile
++++ b/drivers/mempool/ring/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/stack/Makefile b/drivers/mempool/stack/Makefile
+index f8d6c57454e7..325abb6258be 100644
+--- a/drivers/mempool/stack/Makefile
++++ b/drivers/mempool/stack/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/lib/librte_eal/common/eal_common_bus.c b/lib/librte_eal/common/eal_common_bus.c
+index 3e022d51018d..5a8b91bd7527 100644
+--- a/lib/librte_eal/common/eal_common_bus.c
++++ b/lib/librte_eal/common/eal_common_bus.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/lib/librte_eventdev/rte_eventdev.h b/lib/librte_eventdev/rte_eventdev.h
+index daf60a928593..ff9ef5ca8e42 100644
+--- a/lib/librte_eventdev/rte_eventdev.h
++++ b/lib/librte_eventdev/rte_eventdev.h
+@@ -3,7 +3,7 @@
+  *
+  *   Copyright 2016 Cavium, Inc.
+  *   Copyright 2016 Intel Corporation.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/lib/librte_security/rte_security.c b/lib/librte_security/rte_security.c
+index 685729f422e7..375effbda418 100644
+--- a/lib/librte_security/rte_security.c
++++ b/lib/librte_security/rte_security.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *   Copyright(c) 2017 Intel Corporation. All rights reserved.
+  *
+  *   Redistribution and use in source and binary forms, with or without
+diff --git a/lib/librte_security/rte_security.h b/lib/librte_security/rte_security.h
+index 2b609cbf7a5a..7dd041268f4e 100644
+--- a/lib/librte_security/rte_security.h
++++ b/lib/librte_security/rte_security.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *   Copyright(c) 2017 Intel Corporation. All rights reserved.
+  *
+  *   Redistribution and use in source and binary forms, with or without
+diff --git a/lib/librte_security/rte_security_driver.h b/lib/librte_security/rte_security_driver.h
+index 997fbe79f146..34aba35d8a0f 100644
+--- a/lib/librte_security/rte_security_driver.h
++++ b/lib/librte_security/rte_security_driver.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright(c) 2017 Intel Corporation. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+-- 
+2.14.3
+

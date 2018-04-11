@@ -1,0 +1,32 @@
+From e01ad8bb654001bffb254aed45b7ec1a59fc102a Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Thu, 30 Nov 2017 23:37:54 +0530
+Subject: [PATCH 017/166] bus/fslmc: change the eqcr stashing threshold to 1
+
+Changing the EQCR stashing threshold boosts the performance
+of l3fwd application on LS2088 by more than 20% as it helps
+in burst packet processing at the Tx side. CPU is immediately
+informed about the empty EQCR entries once consumed by the
+hardware.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/qbman/qbman_sys.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/bus/fslmc/qbman/qbman_sys.h b/drivers/bus/fslmc/qbman/qbman_sys.h
+index c216e9cfc218..d2253bdda6ab 100644
+--- a/drivers/bus/fslmc/qbman/qbman_sys.h
++++ b/drivers/bus/fslmc/qbman/qbman_sys.h
+@@ -358,7 +358,7 @@ static inline int qbman_swp_sys_init(struct qbman_swp_sys *s,
+ 		reg = qbman_set_swp_cfg(dqrr_size, 0, 0, 3, 2, 3, 1, 1, 1, 1,
+ 					1, 1);
+ 	else
+-		reg = qbman_set_swp_cfg(dqrr_size, 0, 2, 3, 2, 2, 1, 1, 1, 1,
++		reg = qbman_set_swp_cfg(dqrr_size, 0, 1, 3, 2, 2, 1, 1, 1, 1,
+ 					1, 1);
+ 	qbman_cinh_write(s, QBMAN_CINH_SWP_CFG, reg);
+ 	reg = qbman_cinh_read(s, QBMAN_CINH_SWP_CFG);
+-- 
+2.14.3
+

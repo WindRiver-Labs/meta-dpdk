@@ -1,0 +1,27 @@
+From 161db9f5f54940e40bd7f9b82b172d7b6a65a372 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 12 Jan 2018 14:51:27 +0530
+Subject: [PATCH 093/166] PVT: config/dpaa: disable igb uio compliation
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa-linuxapp-gcc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/config/defconfig_arm64-dpaa-linuxapp-gcc b/config/defconfig_arm64-dpaa-linuxapp-gcc
+index 76306ce190bf..64807ddf5a79 100644
+--- a/config/defconfig_arm64-dpaa-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa-linuxapp-gcc
+@@ -42,6 +42,9 @@ CONFIG_RTE_ARCH_ARM_TUNE="cortex-a72"
+ CONFIG_RTE_LIBRTE_VHOST_NUMA=n
+ CONFIG_RTE_EAL_NUMA_AWARE_HUGEPAGES=n
+ 
++# Disable IGB_UIO compilation
++CONFIG_RTE_EAL_IGB_UIO=n
++
+ #
+ # Compile Environment Abstraction Layer
+ #
+-- 
+2.14.3
+

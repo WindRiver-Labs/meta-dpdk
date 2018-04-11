@@ -1,0 +1,34 @@
+From 524406c530dc0b203d372ae8544328d5fbc3c5fb Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 17:57:01 +0530
+Subject: [PATCH 075/166] bus/dpaa: check flag in qman multi enqueue
+
+A caller may/may not pass the flags in qman enqueue multi API.
+This patch adds a check on that flag and only accesses it if passed
+by the caller.
+
+Fixes: 43797e7b4774 ("bus/dpaa: support event dequeue and consumption")
+Cc: stable@dpdk.org
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index cec92e91cd8d..b3151a50dc14 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -2231,7 +2231,7 @@ int qman_enqueue_multi(struct qman_fq *fq,
+ 		eq->fd.addr = cpu_to_be40(fd->addr);
+ 		eq->fd.status = cpu_to_be32(fd->status);
+ 		eq->fd.opaque = cpu_to_be32(fd->opaque);
+-		if (flags[i] & QMAN_ENQUEUE_FLAG_DCA) {
++		if (flags && (flags[i] & QMAN_ENQUEUE_FLAG_DCA)) {
+ 			eq->dca = QM_EQCR_DCA_ENABLE |
+ 				((flags[i] >> 8) & QM_EQCR_DCA_IDXMASK);
+ 		}
+-- 
+2.14.3
+

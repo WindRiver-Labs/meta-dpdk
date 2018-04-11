@@ -1,0 +1,56 @@
+From b017e773bcdd878c1ea8ae1b29a76efb689b5b64 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:23 +0530
+Subject: [PATCH 009/166] net/dpaa2: add VLAN insert offload
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa2/dpaa2_rxtx.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 8ecd238ddbe1..93c23190a3db 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -242,6 +242,12 @@ eth_mbuf_to_sg_fd(struct rte_mbuf *mbuf,
+ 	/* Resetting the buffer pool id and offset field*/
+ 	fd->simple.bpid_offset = 0;
+ 
++	if (unlikely(mbuf->ol_flags & PKT_TX_VLAN_PKT)) {
++		int ret = rte_vlan_insert(&mbuf);
++		if (ret)
++			return ret;
++	}
++
+ 	temp = rte_pktmbuf_alloc(mbuf->pool);
+ 	if (temp == NULL) {
+ 		PMD_TX_LOG(ERR, "No memory to allocate S/G table");
+@@ -308,6 +314,12 @@ static void __attribute__ ((noinline)) __attribute__((hot))
+ eth_mbuf_to_fd(struct rte_mbuf *mbuf,
+ 	       struct qbman_fd *fd, uint16_t bpid)
+ {
++	if (unlikely(mbuf->ol_flags & PKT_TX_VLAN_PKT)) {
++		if (rte_vlan_insert(&mbuf)) {
++			rte_pktmbuf_free(mbuf);
++			return;
++		}
++	}
+ 	/*Resetting the buffer pool id and offset field*/
+ 	fd->simple.bpid_offset = 0;
+ 
+@@ -347,6 +359,12 @@ eth_copy_mbuf_to_fd(struct rte_mbuf *mbuf,
+ 	struct rte_mbuf *m;
+ 	void *mb = NULL;
+ 
++	if (unlikely(mbuf->ol_flags & PKT_TX_VLAN_PKT)) {
++		int ret = rte_vlan_insert(&mbuf);
++		if (ret)
++			return ret;
++	}
++
+ 	if (rte_dpaa2_mbuf_alloc_bulk(
+ 		rte_dpaa2_bpid_info[bpid].bp_list->mp, &mb, 1)) {
+ 		PMD_TX_LOG(WARNING, "Unable to allocated DPAA2 buffer");
+-- 
+2.14.3
+

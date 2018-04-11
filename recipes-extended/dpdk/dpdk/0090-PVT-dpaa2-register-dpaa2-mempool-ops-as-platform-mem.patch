@@ -1,0 +1,76 @@
+From 226bcd92116dd88f78c51a46c595a6e9e100d072 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Mon, 11 Dec 2017 18:47:58 +0530
+Subject: [PATCH 090/166] PVT: dpaa2: register dpaa2 mempool ops as platform
+ mempool
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa2-linuxapp-gcc | 1 -
+ drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c  | 3 +++
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h   | 2 ++
+ drivers/mempool/dpaa2/dpaa2_hw_mempool.c  | 2 +-
+ 4 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/config/defconfig_arm64-dpaa2-linuxapp-gcc b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+index f8686c47c8f5..699d827d31b1 100644
+--- a/config/defconfig_arm64-dpaa2-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+@@ -53,7 +53,6 @@ CONFIG_RTE_LIBRTE_VHOST_NUMA=n
+ # Compile Support Libraries for DPAA2
+ #
+ CONFIG_RTE_LIBRTE_DPAA2_MEMPOOL=y
+-CONFIG_RTE_MBUF_DEFAULT_MEMPOOL_OPS="dpaa2"
+ CONFIG_RTE_LIBRTE_DPAA2_USE_PHYS_IOVA=n
+ 
+ #
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+index 334e1f5ad9cb..461c1e66669f 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+@@ -46,6 +46,7 @@
+ #include <rte_kvargs.h>
+ #include <rte_dev.h>
+ #include <rte_ethdev.h>
++#include <rte_mbuf.h>
+ 
+ #include <fslmc_logs.h>
+ #include <rte_fslmc.h>
+@@ -100,6 +101,8 @@ dpaa2_create_dpbp_device(int vdev_fd __rte_unused,
+ 
+ 	RTE_LOG(DEBUG, PMD, "DPAA2: Added [dpbp.%d]\n", dpbp_id);
+ 
++	rte_mbuf_register_platform_mempool_ops(DPAA2_MEMPOOL_OPS_NAME);
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index dc79922ed63f..c250712734e3 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -70,6 +70,8 @@
+ /* Maximum release/acquire from QBMAN */
+ #define DPAA2_MBUF_MAX_ACQ_REL	7
+ 
++#define DPAA2_MEMPOOL_OPS_NAME		"dpaa2"
++
+ #define MAX_BPID 256
+ #define DPAA2_MBUF_HW_ANNOTATION	64
+ #define DPAA2_FD_PTA_SIZE		0
+diff --git a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+index 8bcbaa8927ec..17c7d627e7a1 100644
+--- a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
++++ b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+@@ -380,7 +380,7 @@ rte_hw_mbuf_get_count(const struct rte_mempool *mp)
+ }
+ 
+ struct rte_mempool_ops dpaa2_mpool_ops = {
+-	.name = "dpaa2",
++	.name = DPAA2_MEMPOOL_OPS_NAME,
+ 	.alloc = rte_hw_mbuf_create_pool,
+ 	.free = rte_hw_mbuf_free_pool,
+ 	.enqueue = rte_hw_mbuf_free_bulk,
+-- 
+2.14.3
+

@@ -1,0 +1,170 @@
+From 07169363d73da269f8a7d184381f421057b49f6f Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 3 Jan 2018 23:36:59 +0530
+Subject: [PATCH 052/166] net/dpaa2: support atomic queues
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/net/dpaa2/Makefile       |  1 +
+ drivers/net/dpaa2/dpaa2_ethdev.c |  7 +++++++
+ drivers/net/dpaa2/dpaa2_ethdev.h |  5 +++++
+ drivers/net/dpaa2/dpaa2_rxtx.c   | 43 +++++++++++++++++++++++++++++++++++++---
+ 4 files changed, 53 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/dpaa2/Makefile b/drivers/net/dpaa2/Makefile
+index ee9b2cceae9e..fdff976be1b0 100644
+--- a/drivers/net/dpaa2/Makefile
++++ b/drivers/net/dpaa2/Makefile
+@@ -51,6 +51,7 @@ CFLAGS += -I$(RTE_SDK)/drivers/bus/fslmc/qbman/include
+ CFLAGS += -I$(RTE_SDK)/drivers/bus/fslmc/mc
+ CFLAGS += -I$(RTE_SDK)/drivers/bus/fslmc/portal
+ CFLAGS += -I$(RTE_SDK)/drivers/mempool/dpaa2
++CFLAGS += -I$(RTE_SDK)/drivers/event/dpaa2
+ CFLAGS += -I$(RTE_SDK)/lib/librte_eal/linuxapp/eal
+ 
+ # versioning export map
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 7bc59eec8c01..bee970451203 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -1711,6 +1711,8 @@ int dpaa2_eth_eventq_attach(const struct rte_eth_dev *dev,
+ 
+ 	if (queue_conf->ev.sched_type == RTE_SCHED_TYPE_PARALLEL)
+ 		dpaa2_ethq->cb = dpaa2_dev_process_parallel_event;
++	else if (queue_conf->ev.sched_type == RTE_SCHED_TYPE_ATOMIC)
++		dpaa2_ethq->cb = dpaa2_dev_process_atomic_event;
+ 	else
+ 		return -EINVAL;
+ 
+@@ -1720,6 +1722,11 @@ int dpaa2_eth_eventq_attach(const struct rte_eth_dev *dev,
+ 	cfg.destination.id = dpcon_id;
+ 	cfg.destination.priority = queue_conf->ev.priority;
+ 
++	if (queue_conf->ev.sched_type == RTE_SCHED_TYPE_ATOMIC) {
++		options |= DPNI_QUEUE_OPT_HOLD_ACTIVE;
++		cfg.destination.hold_active = 1;
++	}
++
+ 	options |= DPNI_QUEUE_OPT_USER_CTX;
+ 	cfg.user_context = (uint64_t)(dpaa2_ethq);
+ 
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.h b/drivers/net/dpaa2/dpaa2_ethdev.h
+index 9a9496f314c9..6546f22fdb85 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.h
++++ b/drivers/net/dpaa2/dpaa2_ethdev.h
+@@ -144,6 +144,11 @@ void dpaa2_dev_process_parallel_event(struct qbman_swp *swp,
+ 				      const struct qbman_result *dq,
+ 				      struct dpaa2_queue *rxq,
+ 				      struct rte_event *ev);
++void dpaa2_dev_process_atomic_event(struct qbman_swp *swp,
++				    const struct qbman_fd *fd,
++				    const struct qbman_result *dq,
++				    struct dpaa2_queue *rxq,
++				    struct rte_event *ev);
+ uint16_t dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts);
+ uint16_t dummy_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts);
+ #endif /* _DPAA2_ETHDEV_H */
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 6c4fddbe0ec2..7ea262b49f2c 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -41,11 +41,13 @@
+ #include <rte_string_fns.h>
+ #include <rte_dev.h>
+ 
++#include <rte_fslmc.h>
+ #include <fslmc_logs.h>
+ #include <fslmc_vfio.h>
+ #include <dpaa2_hw_pvt.h>
+ #include <dpaa2_hw_dpio.h>
+ #include <dpaa2_hw_mempool.h>
++#include <dpaa2_eventdev.h>
+ 
+ #include "dpaa2_ethdev.h"
+ #include "base/dpaa2_hw_dpni_annot.h"
+@@ -667,6 +669,30 @@ dpaa2_dev_process_parallel_event(struct qbman_swp *swp,
+ 	qbman_swp_dqrr_consume(swp, dq);
+ }
+ 
++void dpaa2_dev_process_atomic_event(struct qbman_swp *swp __attribute__((unused)),
++				    const struct qbman_fd *fd,
++				    const struct qbman_result *dq,
++				    struct dpaa2_queue *rxq,
++				    struct rte_event *ev)
++{
++	uint8_t dqrr_index = qbman_get_dqrr_idx(dq);
++
++	ev->mbuf = eth_fd_to_mbuf(fd);
++
++	ev->flow_id = rxq->ev.flow_id;
++	ev->sub_event_type = rxq->ev.sub_event_type;
++	ev->event_type = RTE_EVENT_TYPE_ETHDEV;
++	ev->op = RTE_EVENT_OP_NEW;
++	ev->sched_type = rxq->ev.sched_type;
++	ev->queue_id = rxq->ev.queue_id;
++	ev->priority = rxq->ev.priority;
++
++	ev->mbuf->seqn = dqrr_index + 1;
++	DPAA2_PER_LCORE_DQRR_SIZE++;
++	DPAA2_PER_LCORE_DQRR_HELD |= 1 << dqrr_index;
++	DPAA2_PER_LCORE_DQRR_MBUF(dqrr_index) = ev->mbuf;
++}
++
+ /*
+  * Callback to handle sending packets through WRIOP based interface
+  */
+@@ -687,6 +713,7 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 	uint16_t bpid;
+ 	struct rte_eth_dev *dev = dpaa2_q->dev;
+ 	struct dpaa2_dev_priv *priv = dev->data->dev_private;
++	uint32_t flags[MAX_TX_RING_SLOTS] = {0};
+ 
+ 	if (unlikely(!DPAA2_PER_LCORE_DPIO)) {
+ 		ret = dpaa2_affine_qbman_swp();
+@@ -705,7 +732,6 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 	qbman_eq_desc_set_response(&eqdesc, 0, 0);
+ 	qbman_eq_desc_set_qd(&eqdesc, priv->qdid,
+ 			     dpaa2_q->flow_id, dpaa2_q->tc_index);
+-
+ 	/*Clear the unused FD fields before sending*/
+ 	while (nb_pkts) {
+ 		/*Check if the queue is congested*/
+@@ -720,6 +746,16 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 		frames_to_send = (nb_pkts >> 3) ? MAX_TX_RING_SLOTS : nb_pkts;
+ 
+ 		for (loop = 0; loop < frames_to_send; loop++) {
++			if ((*bufs)->seqn) {
++				uint8_t dqrr_index = (*bufs)->seqn - 1;
++
++				flags[loop] = QBMAN_ENQUEUE_FLAG_DCA |
++						dqrr_index;
++				DPAA2_PER_LCORE_DQRR_SIZE--;
++				DPAA2_PER_LCORE_DQRR_HELD &= ~(1 << dqrr_index);
++				(*bufs)->seqn = DPAA2_INVALID_MBUF_SEQN;
++			}
++
+ 			fd_arr[loop].simple.frc = 0;
+ 			DPAA2_RESET_FD_CTRL((&fd_arr[loop]));
+ 			DPAA2_SET_FD_FLC((&fd_arr[loop]), NULL);
+@@ -787,7 +823,7 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 		loop = 0;
+ 		while (loop < frames_to_send) {
+ 			loop += qbman_swp_enqueue_multiple(swp, &eqdesc,
+-					&fd_arr[loop], NULL,
++					&fd_arr[loop], &flags[loop],
+ 					frames_to_send - loop);
+ 		}
+ 
+@@ -804,7 +840,8 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 
+ 		while (i < loop) {
+ 			i += qbman_swp_enqueue_multiple(swp, &eqdesc,
+-							&fd_arr[i], NULL,
++							&fd_arr[i],
++							&flags[loop],
+ 							loop - i);
+ 		}
+ 		num_tx += loop;
+-- 
+2.14.3
+

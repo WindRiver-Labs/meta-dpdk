@@ -1,0 +1,98 @@
+From 32f4355786098f66c08c06be5380cc0878f704ba Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 22 Feb 2018 15:10:33 +0530
+Subject: [PATCH 156/166] PVT: mbuf: change mempool set from register
+
+Upstream API for mempool register platform has been renamed in 18.02
+to set platform.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+DPDK-1124
+---
+ drivers/bus/dpaa/dpaa_bus.c              | 8 ++++++--
+ drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c | 2 +-
+ lib/librte_mbuf/rte_mbuf.c               | 2 +-
+ lib/librte_mbuf/rte_mbuf.h               | 2 +-
+ lib/librte_mbuf/rte_mbuf_version.map     | 2 +-
+ 5 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index 7b85dc12c44f..4f196baa4d92 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -431,8 +431,6 @@ rte_dpaa_bus_scan(void)
+ 		return ret;
+ 	}
+ 
+-	rte_mbuf_register_platform_mempool_ops(DPAA_MEMPOOL_OPS_NAME);
+-
+ 	/* create the key, supplying a function that'll be invoked
+ 	 * when a portal affined thread will be deleted.
+ 	 */
+@@ -527,6 +525,12 @@ rte_dpaa_bus_probe(void)
+ 		}
+ 	}
+ 
++	/* Register DPAA mempool ops only if any DPAA device has
++	 * been detected.
++	 */
++	if (!TAILQ_EMPTY(&rte_dpaa_bus.device_list))
++		rte_mbuf_set_platform_mempool_ops(DPAA_MEMPOOL_OPS_NAME);
++
+ 	svr_file = fopen(DPAA_SOC_ID_FILE, "r");
+ 	if (svr_file) {
+ 		if (fscanf(svr_file, "svr:%x", &svr_ver) > 0)
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+index e86704ebfbef..cc3474d8a68d 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+@@ -103,7 +103,7 @@ dpaa2_create_dpbp_device(int vdev_fd __rte_unused,
+ 	RTE_LOG(DEBUG, PMD, "DPAA2: Added [dpbp.%d]\n", dpbp_id);
+ 
+ 	if (!register_once) {
+-		rte_mbuf_register_platform_mempool_ops(DPAA2_MEMPOOL_OPS_NAME);
++		rte_mbuf_set_platform_mempool_ops(DPAA2_MEMPOOL_OPS_NAME);
+ 		register_once = 1;
+ 	}
+ 
+diff --git a/lib/librte_mbuf/rte_mbuf.c b/lib/librte_mbuf/rte_mbuf.c
+index 62003373e807..8722c1646732 100644
+--- a/lib/librte_mbuf/rte_mbuf.c
++++ b/lib/librte_mbuf/rte_mbuf.c
+@@ -151,7 +151,7 @@ rte_pktmbuf_init(struct rte_mempool *mp,
+ static const char *plat_mbuf_pool_ops_name;
+ 
+ int
+-rte_mbuf_register_platform_mempool_ops(const char *ops_name)
++rte_mbuf_set_platform_mempool_ops(const char *ops_name)
+ {
+ 	if (plat_mbuf_pool_ops_name == NULL) {
+ 		plat_mbuf_pool_ops_name = ops_name;
+diff --git a/lib/librte_mbuf/rte_mbuf.h b/lib/librte_mbuf/rte_mbuf.h
+index 27f09b805236..b2c8c8f069b3 100644
+--- a/lib/librte_mbuf/rte_mbuf.h
++++ b/lib/librte_mbuf/rte_mbuf.h
+@@ -1106,7 +1106,7 @@ rte_pktmbuf_pool_create(const char *name, unsigned n,
+  *   - -EACCES: platform mempool is already registered.
+  */
+ int
+-rte_mbuf_register_platform_mempool_ops(const char *ops_name);
++rte_mbuf_set_platform_mempool_ops(const char *ops_name);
+ 
+ /**
+  * Get registered platform supported pool ops name for mbuf
+diff --git a/lib/librte_mbuf/rte_mbuf_version.map b/lib/librte_mbuf/rte_mbuf_version.map
+index b8e258f4768d..db13fd1abb1f 100644
+--- a/lib/librte_mbuf/rte_mbuf_version.map
++++ b/lib/librte_mbuf/rte_mbuf_version.map
+@@ -40,6 +40,6 @@ DPDK_18.02 {
+ 	global:
+ 
+ 	rte_mbuf_platform_mempool_ops;
+-	rte_mbuf_register_platform_mempool_ops;
++	rte_mbuf_set_platform_mempool_ops;
+ 
+ } DPDK_16.11;
+-- 
+2.14.3
+

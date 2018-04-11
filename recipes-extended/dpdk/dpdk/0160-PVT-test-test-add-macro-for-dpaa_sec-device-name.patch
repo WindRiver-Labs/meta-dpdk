@@ -1,0 +1,26 @@
+From 2d2f28fd8dfe4302f093360197d735273b6c4a77 Mon Sep 17 00:00:00 2001
+From: Ashish Jain <ashish.jain@nxp.com>
+Date: Mon, 5 Mar 2018 16:36:30 +0530
+Subject: [PATCH 160/166] PVT: test/test: add macro for dpaa_sec device name
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+DPDK-1215
+---
+ test/test/test_cryptodev.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/test/test/test_cryptodev.h b/test/test/test_cryptodev.h
+index 26bfbe602b07..5a6f752f9ae8 100644
+--- a/test/test/test_cryptodev.h
++++ b/test/test/test_cryptodev.h
+@@ -87,6 +87,7 @@
+ #define CRYPTODEV_NAME_ZUC_PMD		crypto_zuc
+ #define CRYPTODEV_NAME_ARMV8_PMD	crypto_armv8
+ #define CRYPTODEV_NAME_DPAA2_SEC_PMD	crypto_dpaa2_sec
++#define CRYPTODEV_NAME_DPAA_SEC_PMD	crypto_dpaa_sec
+ #define CRYPTODEV_NAME_SCHEDULER_PMD	crypto_scheduler
+ #define CRYPTODEV_NAME_MRVL_PMD		crypto_mrvl
+ 
+-- 
+2.14.3
+

@@ -1,0 +1,30 @@
+From 11309f16cbc3badd78874237103eea84de0e35d5 Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 30 Jan 2018 20:36:21 +0530
+Subject: [PATCH 149/166] bus/fslmc: fix DPCI compare in scan
+
+Incorrect string length was being compared while scanning DPCI object.
+
+Fixes: 828d51d8fc3e ("bus/fslmc: refactor scan and probe functions")
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ drivers/bus/fslmc/fslmc_bus.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index d807c8ccfa6c..747ef79ad2dd 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -167,7 +167,7 @@ scan_one_fslmc_device(char *dev_name)
+ 		dev->dev_type = DPAA2_BPOOL;
+ 	else if (!strncmp("dpio", t_ptr, 4))
+ 		dev->dev_type = DPAA2_IO;
+-	else if (!strncmp("dpci", t_ptr, 5))
++	else if (!strncmp("dpci", t_ptr, 4))
+ 		dev->dev_type = DPAA2_CI;
+ 	else if (!strncmp("dpmcp", t_ptr, 5))
+ 		dev->dev_type = DPAA2_MPORTAL;
+-- 
+2.14.3
+

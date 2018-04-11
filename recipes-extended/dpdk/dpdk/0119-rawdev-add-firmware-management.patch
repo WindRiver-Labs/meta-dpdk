@@ -1,0 +1,253 @@
+From 6decf9cbcb90b4264789908c09fe39113220ef3c Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Wed, 31 Jan 2018 14:43:13 +0530
+Subject: [PATCH 119/166] rawdev: add firmware management
+
+Some generic operations for firmware management can loading, unloading,
+starting, stopping and querying firmware of a device.
+
+This patch adds support for such generic operations.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ lib/librte_rawdev/rte_rawdev.c           | 43 ++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev.h           | 64 +++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_pmd.h       | 70 ++++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_version.map |  4 ++
+ 4 files changed, 181 insertions(+)
+
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+index 92aeeb150c7e..64a577247c1c 100644
+--- a/lib/librte_rawdev/rte_rawdev.c
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -320,6 +320,49 @@ rte_rawdev_xstats_reset(uint16_t dev_id,
+ 	return (*dev->dev_ops->xstats_reset)(dev, ids, nb_ids);
+ }
+ 
++int
++rte_rawdev_firmware_status_get(uint16_t dev_id, rte_rawdev_obj_t status_info)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->firmware_status_get, -ENOTSUP);
++	return (*dev->dev_ops->firmware_status_get)(dev, status_info);
++}
++
++int
++rte_rawdev_firmware_version_get(uint16_t dev_id, rte_rawdev_obj_t version_info)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->firmware_version_get, -ENOTSUP);
++	return (*dev->dev_ops->firmware_version_get)(dev, version_info);
++}
++
++int
++rte_rawdev_firmware_load(uint16_t dev_id, rte_rawdev_obj_t firmware_image)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	if (!firmware_image)
++		return -EINVAL;
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->firmware_load, -ENOTSUP);
++	return (*dev->dev_ops->firmware_load)(dev, firmware_image);
++}
++
++int
++rte_rawdev_firmware_unload(uint16_t dev_id)
++{
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	struct rte_rawdev *dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->firmware_load, -ENOTSUP);
++	return (*dev->dev_ops->firmware_unload)(dev);
++}
++
+ int
+ rte_rawdev_start(uint16_t dev_id)
+ {
+diff --git a/lib/librte_rawdev/rte_rawdev.h b/lib/librte_rawdev/rte_rawdev.h
+index 2478493244b2..c32bfdf5fce0 100644
+--- a/lib/librte_rawdev/rte_rawdev.h
++++ b/lib/librte_rawdev/rte_rawdev.h
+@@ -525,6 +525,70 @@ rte_rawdev_xstats_reset(uint16_t dev_id,
+ 			const uint32_t ids[],
+ 			uint32_t nb_ids);
+ 
++/**
++ * Get Firmware status of the device..
++ * Returns a memory allocated by driver/implementation containing status
++ * information block. It is responsibility of caller to release the buffer.
++ *
++ * @param dev_id
++ *   Raw device identifier
++ * @param status_info
++ *   Pointer to status information area. Caller is responsible for releasing
++ *   the memory associated.
++ * @return
++ *   0 for success,
++ *  !0 for failure, `status_info` argument state is undefined
++ */
++int
++rte_rawdev_firmware_status_get(uint16_t dev_id,
++			       rte_rawdev_obj_t status_info);
++
++/**
++ * Get Firmware version of the device.
++ * Returns a memory allocated by driver/implementation containing version
++ * information block. It is responsibility of caller to release the buffer.
++ *
++ * @param dev_id
++ *   Raw device identifier
++ * @param version_info
++ *   Pointer to version information area. Caller is responsible for releasing
++ *   the memory associated.
++ * @return
++ *   0 for success,
++ *  !0 for failure, `version_info` argument state is undefined
++ */
++int
++rte_rawdev_firmware_version_get(uint16_t dev_id,
++				rte_rawdev_obj_t version_info);
++
++/**
++ * Load firmware on the device.
++ * TODO: In future, methods like directly flashing from file too can be
++ * supported.
++ *
++ * @param dev_id
++ *   Raw device identifier
++ * @param firmware_image
++ *   Pointer to buffer containing image binary data
++ * @return
++ *   0 for successful load
++ *  !0 for failure to load the provided image, or image incorrect.
++ */
++int
++rte_rawdev_firmware_load(uint16_t dev_id, rte_rawdev_obj_t firmware_image);
++
++/**
++ * Unload firmware from the device.
++ *
++ * @param dev_id
++ *   Raw device identifiers
++ * @return
++ *   0 for successful Unload
++ *  !0 for failure in unloading
++ */
++int
++rte_rawdev_firmware_unload(uint16_t dev_id);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/librte_rawdev/rte_rawdev_pmd.h b/lib/librte_rawdev/rte_rawdev_pmd.h
+index 570b068f66d5..74d88ba1bfe0 100644
+--- a/lib/librte_rawdev/rte_rawdev_pmd.h
++++ b/lib/librte_rawdev/rte_rawdev_pmd.h
+@@ -416,6 +416,67 @@ typedef int (*rawdev_xstats_get_names_t)(const struct rte_rawdev *dev,
+ typedef uint64_t (*rawdev_xstats_get_by_name_t)(const struct rte_rawdev *dev,
+ 						const char *name,
+ 						unsigned int *id);
++
++/**
++ * Get firmware/device-stack status.
++ * Implementation to allocate buffer for returning information.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param status
++ *   void block containing device specific status information
++ * @return
++ *   0 for success,
++ *   !0 for failure, with undefined value in `status_info`
++ */
++typedef int (*rawdev_firmware_status_get_t)(struct rte_rawdev *dev,
++					    rte_rawdev_obj_t status_info);
++
++/**
++ * Get firmware version information
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param version_info
++ *   void pointer to version information returned by device
++ * @return
++ *   0 for success,
++ *   !0 for failure, with undefined value in `version_info`
++ */
++typedef int (*rawdev_firmware_version_get_t)(struct rte_rawdev *dev,
++					     rte_rawdev_obj_t version_info);
++
++/**
++ * Load firwmare from a buffer (DMA'able)
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param firmware_file
++ *   file pointer to firmware area
++ * @return
++ *   >0, ~0: for successful load
++ *   <0: for failure
++ *
++ * @see Application may use 'firmware_version_get` for ascertaining successful
++ * load
++ */
++typedef int (*rawdev_firmware_load_t)(struct rte_rawdev *dev,
++				      rte_rawdev_obj_t firmware_buf);
++
++/**
++ * Unload firwmare
++ *
++ * @param dev
++ *   Raw device pointer
++ * @return
++ *   >0, ~0 for successful unloading
++ *   <0 for failure in unloading
++ *
++ * Note: Application can use the `firmware_status_get` or
++ * `firmware_version_get` to get result of unload.
++ */
++typedef int (*rawdev_firmware_unload_t)(struct rte_rawdev *dev);
++
+ /** Rawdevice operations function pointer table */
+ struct rte_rawdev_ops {
+ 	/**< Get device info. */
+@@ -460,6 +521,15 @@ struct rte_rawdev_ops {
+ 	rawdev_xstats_get_by_name_t xstats_get_by_name;
+ 	/**< Reset the statistics values in xstats. */
+ 	rawdev_xstats_reset_t xstats_reset;
++
++	/**< Obtainer firmware status */
++	rawdev_firmware_status_get_t firmware_status_get;
++	/**< Obtain firmware version information */
++	rawdev_firmware_version_get_t firmware_version_get;
++	/**< Load firmware */
++	rawdev_firmware_load_t firmware_load;
++	/**< Unload firmware */
++	rawdev_firmware_unload_t firmware_unload;
+ };
+ 
+ /**
+diff --git a/lib/librte_rawdev/rte_rawdev_version.map b/lib/librte_rawdev/rte_rawdev_version.map
+index 469b78d81ead..8de9abdc4f72 100644
+--- a/lib/librte_rawdev/rte_rawdev_version.map
++++ b/lib/librte_rawdev/rte_rawdev_version.map
+@@ -6,6 +6,10 @@ EXPERIMENTAL {
+ 	rte_rawdev_count;
+ 	rte_rawdev_dequeue_buffers;
+ 	rte_rawdev_enqueue_buffers;
++	rte_rawdev_firmware_load;
++	rte_rawdev_firmware_status_get;
++	rte_rawdev_firmware_unload;
++	rte_rawdev_firmware_version_get;
+ 	rte_rawdev_get_attr;
+ 	rte_rawdev_get_dev_id;
+ 	rte_rawdev_info_get;
+-- 
+2.14.3
+

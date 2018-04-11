@@ -1,0 +1,38 @@
+From e2dfd3815609c0ea35dff081d0842fc256a2260f Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Wed, 17 Jan 2018 15:27:20 +0530
+Subject: [PATCH 046/166] doc: add DPAA eventdev guide
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ MAINTAINERS                    | 1 +
+ doc/guides/eventdevs/index.rst | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index bf4d0daf04f1..ced725aa68ec 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -696,6 +696,7 @@ NXP DPAA eventdev
+ M: Hemant Agrawal <hemant.agrawal@nxp.com>
+ M: Sunil Kumar Kori <sunil.kori@nxp.com>
+ F: drivers/event/dpaa/
++F: doc/guides/eventdevs/dpaa.rst
+ 
+ Software Eventdev PMD
+ M: Harry van Haaren <harry.van.haaren@intel.com>
+diff --git a/doc/guides/eventdevs/index.rst b/doc/guides/eventdevs/index.rst
+index ba2048c72635..22f64807a196 100644
+--- a/doc/guides/eventdevs/index.rst
++++ b/doc/guides/eventdevs/index.rst
+@@ -38,5 +38,6 @@ application trough the eventdev API.
+     :numbered:
+ 
+     dpaa2
++    dpaa
+     sw
+     octeontx
+-- 
+2.14.3
+

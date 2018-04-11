@@ -1,0 +1,27 @@
+From 7fe0c465da4fe1b1935f3b61436f507228238dca Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Wed, 7 Mar 2018 17:02:04 +0530
+Subject: [PATCH 164/166] PVT:examples/vhost: add NXP NON upstream compilation
+ flag
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+DPDK-1236
+---
+ examples/vhost/Makefile | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/examples/vhost/Makefile b/examples/vhost/Makefile
+index add9f27bb829..631b896d3166 100644
+--- a/examples/vhost/Makefile
++++ b/examples/vhost/Makefile
+@@ -53,6 +53,7 @@ SRCS-y := main.c virtio_net.c
+ CFLAGS += -O2 -D_FILE_OFFSET_BITS=64
+ CFLAGS += $(WERROR_FLAGS)
+ CFLAGS += -D_GNU_SOURCE
++CFLAGS += -DNXP_NON_UPSTREAMABLE
+ 
+ include $(RTE_SDK)/mk/rte.extapp.mk
+ 
+-- 
+2.14.3
+

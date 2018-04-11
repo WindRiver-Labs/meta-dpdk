@@ -1,0 +1,985 @@
+From 4711d3733ad6c1576eb1299286235bfa6442810d Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 6 Feb 2018 09:10:29 +0530
+Subject: [PATCH 121/166] raw/skeleton: introduce skeleton rawdev driver
+
+Skeleton rawdevice driver, on the lines of eventdev skeleton, is for
+showcasing the rawdev library. This driver implements some of the
+operations of the library based on which a test module can be
+developed.
+
+Design of skeleton involves a virtual device which is plugged into
+VDEV bus on initialization.
+
+Also, enable compilation of rawdev skeleton driver.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ MAINTAINERS                                        |   1 +
+ config/common_base                                 |   1 +
+ drivers/Makefile                                   |   2 +
+ drivers/raw/Makefile                               |   9 +
+ drivers/raw/skeleton_rawdev/Makefile               |  28 +
+ .../rte_pmd_skeleton_rawdev_version.map            |   4 +
+ drivers/raw/skeleton_rawdev/skeleton_rawdev.c      | 691 +++++++++++++++++++++
+ drivers/raw/skeleton_rawdev/skeleton_rawdev.h      | 136 ++++
+ mk/rte.app.mk                                      |   4 +
+ 9 files changed, 876 insertions(+)
+ create mode 100644 drivers/raw/Makefile
+ create mode 100644 drivers/raw/skeleton_rawdev/Makefile
+ create mode 100644 drivers/raw/skeleton_rawdev/rte_pmd_skeleton_rawdev_version.map
+ create mode 100644 drivers/raw/skeleton_rawdev/skeleton_rawdev.c
+ create mode 100644 drivers/raw/skeleton_rawdev/skeleton_rawdev.h
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index c85aae24eb4c..0fb159dc7873 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -296,6 +296,7 @@ Raw device API - EXPERIMENTAL
+ M: Shreyansh Jain <shreyansh.jain@nxp.com>
+ M: Hemant Agrawal <hemant.agrawal@nxp.com>
+ F: lib/librte_rawdev/
++F: drivers/raw/skeleton_rawdev/
+ 
+ 
+ Bus Drivers
+diff --git a/config/common_base b/config/common_base
+index 8a3f66fed689..68177407df16 100644
+--- a/config/common_base
++++ b/config/common_base
+@@ -600,6 +600,7 @@ CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF_DEBUG=n
+ #
+ CONFIG_RTE_LIBRTE_RAWDEV=y
+ CONFIG_RTE_RAWDEV_MAX_DEVS=10
++CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV=y
+ 
+ #
+ # Compile librte_ring
+diff --git a/drivers/Makefile b/drivers/Makefile
+index db0cd76ee797..407f22a3c7ec 100644
+--- a/drivers/Makefile
++++ b/drivers/Makefile
+@@ -40,5 +40,7 @@ DIRS-$(CONFIG_RTE_LIBRTE_CRYPTODEV) += crypto
+ DEPDIRS-crypto := bus mempool
+ DIRS-$(CONFIG_RTE_LIBRTE_EVENTDEV) += event
+ DEPDIRS-event := bus mempool net
++DIRS-$(CONFIG_RTE_LIBRTE_RAWDEV) += raw
++DEPDIRS-raw := bus mempool net event
+ 
+ include $(RTE_SDK)/mk/rte.subdir.mk
+diff --git a/drivers/raw/Makefile b/drivers/raw/Makefile
+new file mode 100644
+index 000000000000..da7c8b449cb6
+--- /dev/null
++++ b/drivers/raw/Makefile
+@@ -0,0 +1,9 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2017 NXP
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++# DIRS-$(<configuration>) += <directory>
++DIRS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV) += skeleton_rawdev
++
++include $(RTE_SDK)/mk/rte.subdir.mk
+diff --git a/drivers/raw/skeleton_rawdev/Makefile b/drivers/raw/skeleton_rawdev/Makefile
+new file mode 100644
+index 000000000000..07f7ba521f59
+--- /dev/null
++++ b/drivers/raw/skeleton_rawdev/Makefile
+@@ -0,0 +1,28 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2017 NXP
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++#
++# library name
++#
++LIB = librte_pmd_skeleton_rawdev.a
++
++CFLAGS += -DALLOW_EXPERIMENTAL_API
++CFLAGS += -O3
++CFLAGS += $(WERROR_FLAGS)
++LDLIBS += -lrte_eal
++LDLIBS += -lrte_rawdev
++LDLIBS += -lrte_bus_vdev
++LDLIBS += -lrte_kvargs
++
++EXPORT_MAP := rte_pmd_skeleton_rawdev_version.map
++
++LIBABIVER := 1
++
++#
++# all source are stored in SRCS-y
++#
++SRCS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV) += skeleton_rawdev.c
++
++include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/drivers/raw/skeleton_rawdev/rte_pmd_skeleton_rawdev_version.map b/drivers/raw/skeleton_rawdev/rte_pmd_skeleton_rawdev_version.map
+new file mode 100644
+index 000000000000..179140fb875b
+--- /dev/null
++++ b/drivers/raw/skeleton_rawdev/rte_pmd_skeleton_rawdev_version.map
+@@ -0,0 +1,4 @@
++DPDK_18.02 {
++
++	local: *;
++};
+diff --git a/drivers/raw/skeleton_rawdev/skeleton_rawdev.c b/drivers/raw/skeleton_rawdev/skeleton_rawdev.c
+new file mode 100644
+index 000000000000..3da7fe1c09e1
+--- /dev/null
++++ b/drivers/raw/skeleton_rawdev/skeleton_rawdev.c
+@@ -0,0 +1,691 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++
++#include <assert.h>
++#include <stdio.h>
++#include <stdbool.h>
++#include <errno.h>
++#include <stdint.h>
++#include <inttypes.h>
++#include <string.h>
++
++#include <rte_byteorder.h>
++#include <rte_common.h>
++#include <rte_debug.h>
++#include <rte_dev.h>
++#include <rte_eal.h>
++#include <rte_kvargs.h>
++#include <rte_log.h>
++#include <rte_malloc.h>
++#include <rte_memory.h>
++#include <rte_memcpy.h>
++#include <rte_lcore.h>
++#include <rte_bus_vdev.h>
++
++#include <rte_rawdev.h>
++#include <rte_rawdev_pmd.h>
++
++#include "skeleton_rawdev.h"
++
++/* Dynamic log type identifier */
++int skeleton_pmd_logtype;
++
++/* Count of instances */
++uint16_t skeldev_init_once;
++
++/**< Rawdev Skeleton dummy driver name */
++#define SKELETON_PMD_RAWDEV_NAME rawdev_skeleton
++
++/**< Skeleton rawdev driver object */
++static struct rte_vdev_driver skeleton_pmd_drv;
++
++struct queue_buffers {
++	void *bufs[SKELETON_QUEUE_MAX_DEPTH];
++};
++
++static struct queue_buffers queue_buf[SKELETON_MAX_QUEUES] = {};
++static void clear_queue_bufs(int queue_id);
++
++static void skeleton_rawdev_info_get(struct rte_rawdev *dev,
++				     rte_rawdev_obj_t dev_info)
++{
++	struct skeleton_rawdev *skeldev;
++	struct skeleton_rawdev_conf *skeldev_conf;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (!dev_info) {
++		SKELETON_PMD_ERR("Invalid request");
++		return;
++	}
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	skeldev_conf = dev_info;
++
++	skeldev_conf->num_queues = skeldev->num_queues;
++	skeldev_conf->capabilities = skeldev->capabilities;
++	skeldev_conf->device_state = skeldev->device_state;
++	skeldev_conf->firmware_state = skeldev->fw.firmware_state;
++}
++
++static int skeleton_rawdev_configure(const struct rte_rawdev *dev,
++				     rte_rawdev_obj_t config)
++{
++	struct skeleton_rawdev *skeldev;
++	struct skeleton_rawdev_conf *skeldev_conf;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	if (!config) {
++		SKELETON_PMD_ERR("Invalid configuration");
++		return -EINVAL;
++	}
++
++	skeldev_conf = config;
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	if (skeldev_conf->num_queues <= SKELETON_MAX_QUEUES)
++		skeldev->num_queues = skeldev_conf->num_queues;
++	else
++		return -EINVAL;
++
++	skeldev->capabilities = skeldev_conf->capabilities;
++	skeldev->num_queues = skeldev_conf->num_queues;
++
++	return 0;
++}
++
++static int skeleton_rawdev_start(struct rte_rawdev *dev)
++{
++	int ret = 0;
++	struct skeleton_rawdev *skeldev;
++	enum skeleton_firmware_state fw_state;
++	enum skeleton_device_state device_state;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	fw_state = skeldev->fw.firmware_state;
++	device_state = skeldev->device_state;
++
++	if (fw_state == SKELETON_FW_LOADED &&
++		device_state == SKELETON_DEV_STOPPED) {
++		skeldev->device_state = SKELETON_DEV_RUNNING;
++	} else {
++		SKELETON_PMD_ERR("Device not ready for starting");
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++static void skeleton_rawdev_stop(struct rte_rawdev *dev)
++{
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (dev) {
++		skeldev = skeleton_rawdev_get_priv(dev);
++		skeldev->device_state = SKELETON_DEV_STOPPED;
++	}
++}
++
++static void
++reset_queues(struct skeleton_rawdev *skeldev)
++{
++	int i;
++
++	for (i = 0; i < SKELETON_MAX_QUEUES; i++) {
++		skeldev->queues[i].depth = SKELETON_QUEUE_DEF_DEPTH;
++		skeldev->queues[i].state = SKELETON_QUEUE_DETACH;
++	}
++}
++
++static void
++reset_attribute_table(struct skeleton_rawdev *skeldev)
++{
++	int i;
++
++	for (i = 0; i < SKELETON_MAX_ATTRIBUTES; i++) {
++		if (skeldev->attr[i].name) {
++			free(skeldev->attr[i].name);
++			skeldev->attr[i].name = NULL;
++		}
++	}
++}
++
++static int skeleton_rawdev_close(struct rte_rawdev *dev)
++{
++	int ret = 0, i;
++	struct skeleton_rawdev *skeldev;
++	enum skeleton_firmware_state fw_state;
++	enum skeleton_device_state device_state;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	fw_state = skeldev->fw.firmware_state;
++	device_state = skeldev->device_state;
++
++	reset_queues(skeldev);
++	reset_attribute_table(skeldev);
++
++	switch (fw_state) {
++	case SKELETON_FW_LOADED:
++		if (device_state == SKELETON_DEV_RUNNING) {
++			SKELETON_PMD_ERR("Cannot close running device");
++			ret = -EINVAL;
++		} else {
++			/* Probably call fw reset here */
++			skeldev->fw.firmware_state = SKELETON_FW_READY;
++		}
++		break;
++	case SKELETON_FW_READY:
++	case SKELETON_FW_ERROR:
++	default:
++		SKELETON_PMD_DEBUG("Device already in stopped state");
++		ret = -EINVAL;
++		break;
++	}
++
++	/* Clear all allocated queues */
++	for (i = 0; i < SKELETON_MAX_QUEUES; i++)
++		clear_queue_bufs(i);
++
++	return ret;
++}
++
++static int skeleton_rawdev_reset(struct rte_rawdev *dev)
++{
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	SKELETON_PMD_DEBUG("Resetting device");
++	skeldev->fw.firmware_state = SKELETON_FW_READY;
++
++	return 0;
++}
++
++static void skeleton_rawdev_queue_def_conf(struct rte_rawdev *dev,
++					   uint16_t queue_id,
++					   rte_rawdev_obj_t queue_conf)
++{
++	struct skeleton_rawdev *skeldev;
++	struct skeleton_rawdev_queue *skelq;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (!dev || !queue_conf)
++		return;
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++	skelq = &skeldev->queues[queue_id];
++
++	if (queue_id < SKELETON_MAX_QUEUES)
++		rte_memcpy(queue_conf, skelq,
++			sizeof(struct skeleton_rawdev_queue));
++}
++
++static void
++clear_queue_bufs(int queue_id)
++{
++	int i;
++
++	/* Clear buffers for queue_id */
++	for (i = 0; i < SKELETON_QUEUE_MAX_DEPTH; i++)
++		queue_buf[queue_id].bufs[i] = NULL;
++}
++
++static int skeleton_rawdev_queue_setup(struct rte_rawdev *dev,
++				       uint16_t queue_id,
++				       rte_rawdev_obj_t queue_conf)
++{
++	int ret = 0;
++	struct skeleton_rawdev *skeldev;
++	struct skeleton_rawdev_queue *q;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (!dev || !queue_conf)
++		return -EINVAL;
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++	q = &skeldev->queues[queue_id];
++
++	if (skeldev->num_queues > queue_id &&
++	    q->depth < SKELETON_QUEUE_MAX_DEPTH) {
++		rte_memcpy(q, queue_conf,
++			   sizeof(struct skeleton_rawdev_queue));
++		clear_queue_bufs(queue_id);
++	} else {
++		SKELETON_PMD_ERR("Invalid queue configuration");
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++static int skeleton_rawdev_queue_release(struct rte_rawdev *dev,
++					 uint16_t queue_id)
++{
++	int ret = 0;
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	if (skeldev->num_queues > queue_id) {
++		skeldev->queues[queue_id].state = SKELETON_QUEUE_DETACH;
++		skeldev->queues[queue_id].depth = SKELETON_QUEUE_DEF_DEPTH;
++		clear_queue_bufs(queue_id);
++	} else {
++		SKELETON_PMD_ERR("Invalid queue configuration");
++		ret = -EINVAL;
++	}
++
++	return ret;
++}
++
++static int skeleton_rawdev_get_attr(struct rte_rawdev *dev,
++				    const char *attr_name,
++				    uint64_t *attr_value)
++{
++	int i;
++	uint8_t done = 0;
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (!dev || !attr_name || !attr_value) {
++		SKELETON_PMD_ERR("Invalid arguments for getting attributes");
++		return -EINVAL;
++	}
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	for (i = 0; i < SKELETON_MAX_ATTRIBUTES; i++) {
++		if (!skeldev->attr[i].name)
++			continue;
++
++		if (!strncmp(skeldev->attr[i].name, attr_name,
++			    SKELETON_ATTRIBUTE_NAME_MAX)) {
++			*attr_value = skeldev->attr[i].value;
++			done = 1;
++			SKELETON_PMD_DEBUG("Attribute (%s) Value (%" PRIu64 ")",
++					   attr_name, *attr_value);
++			break;
++		}
++	}
++
++	if (done)
++		return 0;
++
++	/* Attribute not found */
++	return -EINVAL;
++}
++
++static int skeleton_rawdev_set_attr(struct rte_rawdev *dev,
++				     const char *attr_name,
++				     const uint64_t attr_value)
++{
++	int i;
++	uint8_t done = 0;
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	if (!dev || !attr_name) {
++		SKELETON_PMD_ERR("Invalid arguments for setting attributes");
++		return -EINVAL;
++	}
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	/* Check if attribute already exists */
++	for (i = 0; i < SKELETON_MAX_ATTRIBUTES; i++) {
++		if (!skeldev->attr[i].name)
++			break;
++
++		if (!strncmp(skeldev->attr[i].name, attr_name,
++			     SKELETON_ATTRIBUTE_NAME_MAX)) {
++			/* Update value */
++			skeldev->attr[i].value = attr_value;
++			done = 1;
++			break;
++		}
++	}
++
++	if (!done) {
++		if (i < (SKELETON_MAX_ATTRIBUTES - 1)) {
++			/* There is still space to insert one more */
++			skeldev->attr[i].name = strdup(attr_name);
++			if (!skeldev->attr[i].name)
++				return -ENOMEM;
++
++			skeldev->attr[i].value = attr_value;
++			return 0;
++		}
++	}
++
++	return -EINVAL;
++}
++
++static int skeleton_rawdev_enqueue_bufs(struct rte_rawdev *dev,
++					struct rte_rawdev_buf **buffers,
++					unsigned int count,
++					rte_rawdev_obj_t context)
++{
++	unsigned int i;
++	uint16_t q_id;
++	RTE_SET_USED(dev);
++
++	/* context is essentially the queue_id which is
++	 * transferred as opaque object through the library layer. This can
++	 * help in complex implementation which require more information than
++	 * just an integer - for example, a queue-pair.
++	 */
++	q_id = *((int *)context);
++
++	for (i = 0; i < count; i++)
++		queue_buf[q_id].bufs[i] = buffers[i]->buf_addr;
++
++	return i;
++}
++
++static int skeleton_rawdev_dequeue_bufs(struct rte_rawdev *dev,
++					struct rte_rawdev_buf **buffers,
++					unsigned int count,
++					rte_rawdev_obj_t context)
++{
++	unsigned int i;
++	uint16_t q_id;
++	RTE_SET_USED(dev);
++
++	/* context is essentially the queue_id which is
++	 * transferred as opaque object through the library layer. This can
++	 * help in complex implementation which require more information than
++	 * just an integer - for example, a queue-pair.
++	 */
++	q_id = *((int *)context);
++
++	for (i = 0; i < count; i++)
++		buffers[i]->buf_addr = queue_buf[q_id].bufs[i];
++
++	return i;
++}
++
++static int skeleton_rawdev_dump(struct rte_rawdev *dev, FILE *f)
++{
++	RTE_SET_USED(dev);
++	RTE_SET_USED(f);
++
++	return 0;
++}
++
++static int skeleton_rawdev_firmware_status_get(struct rte_rawdev *dev,
++					       rte_rawdev_obj_t status_info)
++{
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	RTE_FUNC_PTR_OR_ERR_RET(dev, -EINVAL);
++
++	if (status_info)
++		memcpy(status_info, &skeldev->fw.firmware_state,
++			sizeof(enum skeleton_firmware_state));
++
++	return 0;
++}
++
++
++static int skeleton_rawdev_firmware_version_get(
++					struct rte_rawdev *dev,
++					rte_rawdev_obj_t version_info)
++{
++	struct skeleton_rawdev *skeldev;
++	struct skeleton_firmware_version_info *vi;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++	vi = version_info;
++
++	vi->major = skeldev->fw.firmware_version.major;
++	vi->minor = skeldev->fw.firmware_version.minor;
++	vi->subrel = skeldev->fw.firmware_version.subrel;
++
++	return 0;
++}
++
++static int skeleton_rawdev_firmware_load(struct rte_rawdev *dev,
++					 rte_rawdev_obj_t firmware_buf)
++{
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	/* firmware_buf is a mmaped, possibly DMA'able area, buffer. Being
++	 * dummy, all this does is check if firmware_buf is not NULL and
++	 * sets the state of the firmware.
++	 */
++	if (!firmware_buf)
++		return -EINVAL;
++
++	skeldev->fw.firmware_state = SKELETON_FW_LOADED;
++
++	return 0;
++}
++
++static int skeleton_rawdev_firmware_unload(struct rte_rawdev *dev)
++{
++	struct skeleton_rawdev *skeldev;
++
++	SKELETON_PMD_FUNC_TRACE();
++
++	skeldev = skeleton_rawdev_get_priv(dev);
++
++	skeldev->fw.firmware_state = SKELETON_FW_READY;
++
++	return 0;
++}
++
++static const struct rte_rawdev_ops skeleton_rawdev_ops = {
++	.dev_info_get = skeleton_rawdev_info_get,
++	.dev_configure = skeleton_rawdev_configure,
++	.dev_start = skeleton_rawdev_start,
++	.dev_stop = skeleton_rawdev_stop,
++	.dev_close = skeleton_rawdev_close,
++	.dev_reset = skeleton_rawdev_reset,
++
++	.queue_def_conf = skeleton_rawdev_queue_def_conf,
++	.queue_setup = skeleton_rawdev_queue_setup,
++	.queue_release = skeleton_rawdev_queue_release,
++
++	.attr_get = skeleton_rawdev_get_attr,
++	.attr_set = skeleton_rawdev_set_attr,
++
++	.enqueue_bufs = skeleton_rawdev_enqueue_bufs,
++	.dequeue_bufs = skeleton_rawdev_dequeue_bufs,
++
++	.dump = skeleton_rawdev_dump,
++
++	.xstats_get = NULL,
++	.xstats_get_names = NULL,
++	.xstats_get_by_name = NULL,
++	.xstats_reset = NULL,
++
++	.firmware_status_get = skeleton_rawdev_firmware_status_get,
++	.firmware_version_get = skeleton_rawdev_firmware_version_get,
++	.firmware_load = skeleton_rawdev_firmware_load,
++	.firmware_unload = skeleton_rawdev_firmware_unload,
++};
++
++static int
++skeleton_rawdev_create(const char *name,
++		       struct rte_vdev_device *vdev,
++		       int socket_id)
++{
++	int ret = 0, i;
++	struct rte_rawdev *rawdev = NULL;
++	struct skeleton_rawdev *skeldev = NULL;
++
++	if (!name) {
++		SKELETON_PMD_ERR("Invalid name of the device!");
++		ret = -EINVAL;
++		goto cleanup;
++	}
++
++	/* Allocate device structure */
++	rawdev = rte_rawdev_pmd_allocate(name, sizeof(struct skeleton_rawdev),
++					 socket_id);
++	if (rawdev == NULL) {
++		SKELETON_PMD_ERR("Unable to allocate rawdevice");
++		ret = -EINVAL;
++		goto cleanup;
++	}
++
++	rawdev->dev_ops = &skeleton_rawdev_ops;
++	rawdev->device = &vdev->device;
++	rawdev->driver_name = vdev->device.driver->name;
++
++	skeldev = skeleton_rawdev_get_priv(rawdev);
++
++	skeldev->device_id = SKELETON_DEVICE_ID;
++	skeldev->vendor_id = SKELETON_VENDOR_ID;
++	skeldev->capabilities = SKELETON_DEFAULT_CAPA;
++
++	memset(&skeldev->fw, 0, sizeof(struct skeleton_firmware));
++
++	skeldev->fw.firmware_state = SKELETON_FW_READY;
++	skeldev->fw.firmware_version.major = SKELETON_MAJOR_VER;
++	skeldev->fw.firmware_version.minor = SKELETON_MINOR_VER;
++	skeldev->fw.firmware_version.subrel = SKELETON_SUB_VER;
++
++	skeldev->device_state = SKELETON_DEV_STOPPED;
++
++	/* Reset/set to default queue configuration for this device */
++	for (i = 0; i < SKELETON_MAX_QUEUES; i++) {
++		skeldev->queues[i].state = SKELETON_QUEUE_DETACH;
++		skeldev->queues[i].depth = SKELETON_QUEUE_DEF_DEPTH;
++	}
++
++	/* Clear all allocated queue buffers */
++	for (i = 0; i < SKELETON_MAX_QUEUES; i++)
++		clear_queue_bufs(i);
++
++	return ret;
++
++cleanup:
++	if (rawdev)
++		rte_rawdev_pmd_release(rawdev);
++
++	return ret;
++}
++
++static int
++skeleton_rawdev_destroy(const char *name)
++{
++	int ret;
++	struct rte_rawdev *rdev;
++
++	if (!name) {
++		SKELETON_PMD_ERR("Invalid device name");
++		return -EINVAL;
++	}
++
++	rdev = rte_rawdev_pmd_get_named_dev(name);
++	if (!rdev) {
++		SKELETON_PMD_ERR("Invalid device name (%s)", name);
++		return -EINVAL;
++	}
++
++	/* rte_rawdev_close is called by pmd_release */
++	ret = rte_rawdev_pmd_release(rdev);
++	if (ret)
++		SKELETON_PMD_DEBUG("Device cleanup failed");
++
++	return 0;
++}
++
++static int
++skeleton_rawdev_probe(struct rte_vdev_device *vdev)
++{
++	const char *name;
++	int ret = 0;
++
++
++	name = rte_vdev_device_name(vdev);
++	/* More than one instance is not supported */
++	if (skeldev_init_once) {
++		SKELETON_PMD_ERR("Multiple instance not supported for %s",
++				 name);
++		return -EINVAL;
++	}
++
++	SKELETON_PMD_INFO("Init %s on NUMA node %d", name, rte_socket_id());
++
++	ret = skeleton_rawdev_create(name, vdev, rte_socket_id());
++
++	/* Device instance created; Second instance not possible */
++	skeldev_init_once = 1;
++
++	return ret;
++}
++
++static int
++skeleton_rawdev_remove(struct rte_vdev_device *vdev)
++{
++	const char *name;
++	int ret;
++
++	name = rte_vdev_device_name(vdev);
++
++	SKELETON_PMD_INFO("Closing %s on NUMA node %d", name, rte_socket_id());
++
++	ret = skeleton_rawdev_destroy(name);
++	if (!ret)
++		skeldev_init_once = 0;
++
++	return ret;
++}
++
++static struct rte_vdev_driver skeleton_pmd_drv = {
++	.probe = skeleton_rawdev_probe,
++	.remove = skeleton_rawdev_remove
++};
++
++RTE_PMD_REGISTER_VDEV(SKELETON_PMD_RAWDEV_NAME, skeleton_pmd_drv);
++
++RTE_INIT(skeleton_pmd_init_log);
++
++static void
++skeleton_pmd_init_log(void)
++{
++	skeleton_pmd_logtype = rte_log_register("rawdev.skeleton");
++	if (skeleton_pmd_logtype >= 0)
++		rte_log_set_level(skeleton_pmd_logtype, RTE_LOG_INFO);
++}
+diff --git a/drivers/raw/skeleton_rawdev/skeleton_rawdev.h b/drivers/raw/skeleton_rawdev/skeleton_rawdev.h
+new file mode 100644
+index 000000000000..5045b5922879
+--- /dev/null
++++ b/drivers/raw/skeleton_rawdev/skeleton_rawdev.h
+@@ -0,0 +1,136 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++
++#ifndef __SKELETON_RAWDEV_H__
++#define __SKELETON_RAWDEV_H__
++
++#include <rte_rawdev.h>
++
++extern int skeleton_pmd_logtype;
++
++#define SKELETON_PMD_LOG(level, fmt, args...) \
++	rte_log(RTE_LOG_ ## level, skeleton_pmd_logtype, "%s(): " fmt "\n", \
++		__func__, ##args)
++
++#define SKELETON_PMD_FUNC_TRACE() SKELETON_PMD_LOG(DEBUG, ">>")
++
++#define SKELETON_PMD_DEBUG(fmt, args...) \
++	SKELETON_PMD_LOG(DEBUG, fmt, ## args)
++#define SKELETON_PMD_INFO(fmt, args...) \
++	SKELETON_PMD_LOG(INFO, fmt, ## args)
++#define SKELETON_PMD_ERR(fmt, args...) \
++	SKELETON_PMD_LOG(ERR, fmt, ## args)
++#define SKELETON_PMD_WARN(fmt, args...) \
++	SKELETON_PMD_LOG(WARNING, fmt, ## args)
++/* Macros for self test application */
++#define SKELETON_TEST_INFO	SKELETON_PMD_INFO
++#define SKELETON_TEST_DEBUG	SKELETON_PMD_DEBUG
++#define SKELETON_TEST_ERR	SKELETON_PMD_ERR
++#define SKELETON_TEST_WARN	SKELETON_PMD_WARN
++
++#define SKELETON_SELFTEST_ARG   ("selftest")
++
++#define SKELETON_VENDOR_ID 0x10
++#define SKELETON_DEVICE_ID 0x01
++
++#define SKELETON_MAJOR_VER 1
++#define SKELETON_MINOR_VER 0
++#define SKELETON_SUB_VER   0
++
++#define SKELETON_MAX_QUEUES 1
++
++enum skeleton_firmware_state {
++	SKELETON_FW_READY,
++	SKELETON_FW_LOADED,
++	SKELETON_FW_ERROR
++};
++
++enum skeleton_device_state {
++	SKELETON_DEV_RUNNING,
++	SKELETON_DEV_STOPPED
++};
++
++enum skeleton_queue_state {
++	SKELETON_QUEUE_DETACH,
++	SKELETON_QUEUE_ATTACH
++};
++
++#define SKELETON_QUEUE_DEF_DEPTH 10
++#define SKELETON_QUEUE_MAX_DEPTH 25
++
++struct skeleton_firmware_version_info {
++	uint8_t major;
++	uint8_t minor;
++	uint8_t subrel;
++};
++
++struct skeleton_firmware {
++	/**< Device firmware information */
++	struct skeleton_firmware_version_info firmware_version;
++	/**< Device state */
++	enum skeleton_firmware_state firmware_state;
++
++};
++
++#define SKELETON_MAX_ATTRIBUTES 10
++#define SKELETON_ATTRIBUTE_NAME_MAX 20
++
++struct skeleton_rawdev_attributes {
++	/**< Name of the attribute */
++	char *name;
++	/**< Value or reference of value of attribute */
++	uint64_t value;
++};
++
++/**< Device supports firmware loading/unloading */
++#define SKELETON_CAPA_FW_LOAD	0x0001
++/**< Device supports firmware reset */
++#define SKELETON_CAPA_FW_RESET  0x0002
++/**< Device support queue based communication */
++#define SKELETON_CAPA_QUEUES    0x0004
++/**< Default Capabilities: FW_LOAD, FW_RESET, QUEUES */
++#define SKELETON_DEFAULT_CAPA   0x7
++
++struct skeleton_rawdev_queue {
++	uint8_t state;
++	uint32_t depth;
++};
++
++struct skeleton_rawdev {
++	uint16_t device_id;
++	uint16_t vendor_id;
++	uint16_t num_queues;
++	/**< One of SKELETON_CAPA_* */
++	uint16_t capabilities;
++	/**< State of device; linked to firmware state */
++	enum skeleton_device_state device_state;
++	/**< Firmware configuration */
++	struct skeleton_firmware fw;
++	/**< Collection of all communication channels - which can be referred
++	 *  to as queues.
++	 */
++	struct skeleton_rawdev_queue queues[SKELETON_MAX_QUEUES];
++	/**< Global table containing various pre-defined and user-defined
++	 * attributes.
++	 */
++	struct skeleton_rawdev_attributes attr[SKELETON_MAX_ATTRIBUTES];
++	struct rte_device *device;
++};
++
++struct skeleton_rawdev_conf {
++	uint16_t num_queues;
++	unsigned int capabilities;
++	enum skeleton_device_state device_state;
++	enum skeleton_firmware_state firmware_state;
++};
++
++static inline struct skeleton_rawdev *
++skeleton_rawdev_get_priv(const struct rte_rawdev *rawdev)
++{
++	return rawdev->dev_private;
++}
++
++int test_rawdev_skeldev(void);
++
++#endif /* __SKELETON_RAWDEV_H__ */
+diff --git a/mk/rte.app.mk b/mk/rte.app.mk
+index 067de42e4c5d..5edf886c3e6e 100644
+--- a/mk/rte.app.mk
++++ b/mk/rte.app.mk
+@@ -204,6 +204,10 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_OCTEONTX_MEMPOOL) += -lrte_mempool_octeontx
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_OCTEONTX_PMD) += -lrte_pmd_octeontx
+ endif # CONFIG_RTE_LIBRTE_EVENTDEV
+ 
++ifeq ($(CONFIG_RTE_LIBRTE_RAWDEV),y)
++_LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_RAWDEV) += -lrte_pmd_skeleton_rawdev
++endif # CONFIG_RTE_LIBRTE_RAWDEV
++
+ ifeq ($(CONFIG_RTE_LIBRTE_DPAA2_PMD),y)
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_DPAA2_PMD)      += -lrte_bus_fslmc
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_DPAA2_PMD)      += -lrte_mempool_dpaa2
+-- 
+2.14.3
+

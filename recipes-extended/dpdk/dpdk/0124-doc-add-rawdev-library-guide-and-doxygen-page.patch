@@ -1,0 +1,179 @@
+From 9654ed9ae4a7ce0ce8d6b01f14f76357d3517b4d Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 6 Feb 2018 09:14:17 +0530
+Subject: [PATCH 124/166] doc: add rawdev library guide and doxygen page
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ MAINTAINERS                      |   1 +
+ doc/api/doxy-api-index.md        |   1 +
+ doc/api/doxy-api.conf            |   1 +
+ doc/guides/prog_guide/index.rst  |   1 +
+ doc/guides/prog_guide/rawdev.rst | 107 +++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 111 insertions(+)
+ create mode 100644 doc/guides/prog_guide/rawdev.rst
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 537664ed3d4f..072bbbed8954 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -298,6 +298,7 @@ M: Hemant Agrawal <hemant.agrawal@nxp.com>
+ F: lib/librte_rawdev/
+ F: drivers/raw/skeleton_rawdev/
+ F: test/test/test_rawdev.c
++F: doc/guides/prog_guide/rawdev.rst
+ 
+ 
+ Bus Drivers
+diff --git a/doc/api/doxy-api-index.md b/doc/api/doxy-api-index.md
+index 38314afe0402..dfd47916aef9 100644
+--- a/doc/api/doxy-api-index.md
++++ b/doc/api/doxy-api-index.md
+@@ -46,6 +46,7 @@ The public API headers are grouped by topics:
+   [security]           (@ref rte_security.h),
+   [eventdev]           (@ref rte_eventdev.h),
+   [event_eth_rx_adapter]   (@ref rte_event_eth_rx_adapter.h),
++  [rawdev]             (@ref rte_rawdev.h),
+   [metrics]            (@ref rte_metrics.h),
+   [bitrate]            (@ref rte_bitrate.h),
+   [latency]            (@ref rte_latencystats.h),
+diff --git a/doc/api/doxy-api.conf b/doc/api/doxy-api.conf
+index 09e323261be9..5be0633a35e7 100644
+--- a/doc/api/doxy-api.conf
++++ b/doc/api/doxy-api.conf
+@@ -70,6 +70,7 @@ INPUT                   = doc/api/doxy-api-index.md \
+                           lib/librte_pipeline \
+                           lib/librte_port \
+                           lib/librte_power \
++                          lib/librte_rawdev \
+                           lib/librte_reorder \
+                           lib/librte_ring \
+                           lib/librte_sched \
+diff --git a/doc/guides/prog_guide/index.rst b/doc/guides/prog_guide/index.rst
+index c4beb346b13e..73f53ce859e2 100644
+--- a/doc/guides/prog_guide/index.rst
++++ b/doc/guides/prog_guide/index.rst
+@@ -48,6 +48,7 @@ Programmer's Guide
+     traffic_management
+     cryptodev_lib
+     rte_security
++    rawdev
+     link_bonding_poll_mode_drv_lib
+     timer_lib
+     hash_lib
+diff --git a/doc/guides/prog_guide/rawdev.rst b/doc/guides/prog_guide/rawdev.rst
+new file mode 100644
+index 000000000000..54bffc5851e8
+--- /dev/null
++++ b/doc/guides/prog_guide/rawdev.rst
+@@ -0,0 +1,107 @@
++..  SPDX-License-Identifier: BSD-3-Clause
++    Copyright 2018 NXP
++
++Rawdevice Library
++=================
++
++Introduction
++------------
++
++In terms of device flavor (type) support, DPDK currently has ethernet
++(lib_ether), cryptodev (libcryptodev), eventdev (libeventdev) and vdev
++(virtual device) support.
++
++For a new type of device, for example an accelerator, there are not many
++options except:
++1. create another lib/librte_MySpecialDev, driver/MySpecialDrv and use it
++through Bus/PMD model.
++2. Or, create a vdev and implement necessary custom APIs which are directly
++exposed from driver layer. However this may still require changes in bus code
++in DPDK.
++
++The DPDK Rawdev library is an abstraction that provides the DPDK framework a
++way to manage such devices in a generic manner without expecting changes to
++library or EAL for each device type. This library provides a generic set of
++operations and APIs for framework and Applications to use, respectively, for
++interfacing with such type of devices.
++
++Design
++------
++
++Key factors guiding design of the Rawdevice library:
++
++1. Following are some generic operations which can be treated as applicable
++   to a large subset of device types. None of the operations are mandatory to
++   be implemented by a driver. Application should also be design for proper
++   handling for unsupported APIs.
++
++  * Device Start/Stop - In some cases, 'reset' might also be required which
++    has different semantics than a start-stop-start cycle.
++  * Configuration - Device, Queue or any other sub-system configuration
++  * I/O - Sending a series of buffers which can enclose any arbitrary data
++  * Statistics - Fetch arbitrary device statistics
++  * Firmware Management - Firmware load/unload/status
++
++2. Application API should be able to pass along arbitrary state information
++   to/fro device driver. This can be achieved by maintaining context
++   information through opaque data or pointers.
++
++Figure below outlines the layout of the rawdevice library and device vis-a-vis
++other well known device types like eth and crypto:
++
++.. code-block:: console
++
++     +-----------------------------------------------------------+
++     |                        Application(s)                     |
++     +------------------------------.----------------------------+
++                                    |
++                                    |
++     +------------------------------'----------------------------+
++     |                     DPDK Framework (APIs)                 |
++     +--------------|----|-----------------|---------------------+
++                   /      \                 \
++            (crypto ops)  (eth ops)      (rawdev ops)        +----+
++            /               \                 \              |DrvA|
++     +-----'---+        +----`----+        +---'-----+       +----+
++     | crypto  |        | ethdev  |        | raw     |
++     +--/------+        +---/-----+        +----/----+       +----+
++       /\                __/\                  /   ..........|DrvB|
++      /  \              /    \                / ../    \     +----+
++  +====+ +====+    +====+ +====+            +==/=+      ```Bus Probe
++  |DevA| |DevB|    |DevC| |DevD|            |DevF|
++  +====+ +====+    +====+ +====+            +====+
++    |      |        |      |                 |
++  ``|``````|````````|``````|`````````````````|````````Bus Scan
++   (PCI)   |       (PCI)  (PCI)            (PCI)
++         (BusA)
++
++ * It is assumed above that DrvB is a PCI type driver which registers itself
++   with PCI Bus
++ * Thereafter, when the PCI scan is done, during probe DrvB would match the
++   rawdev DevF ID and take control of device
++ * Applications can then continue using the device through rawdev API
++   interfaces
++
++
++Device Identification
++~~~~~~~~~~~~~~~~~~~~~
++
++Physical rawdev devices are discovered during the Bus scan executed at DPDK
++initialization, based on their identification and probing with corresponding
++driver. Thus, a generic device needs to have an identifier and a driver
++capable of identifying it through this identifier.
++
++Virtual devices can be created by two mechanisms, either using the EAL command
++line options or from within the application using an EAL API directly.
++
++From the command line using the --vdev EAL option
++
++.. code-block:: console
++
++   --vdev 'rawdev_dev1'
++
++Our using the rte_vdev_init API within the application code.
++
++.. code-block:: c
++
++    rte_vdev_init("rawdev_dev1", NULL)
+-- 
+2.14.3
+

@@ -1,0 +1,153 @@
+From 4f62404d61be01e8e2e92cd7352fd06aad70693e Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:18 +0530
+Subject: [PATCH 004/166] bus/fslmc: expose platform SoC value register
+
+This patch expose the dpaa2 soc platform family type.
+This is required to make some soc variant specific
+decision during configuration and runtime.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.c    | 42 +++++++++++++++--------------
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.h    |  3 +++
+ drivers/bus/fslmc/rte_bus_fslmc_version.map |  1 +
+ drivers/net/dpaa2/dpaa2_ethdev.c            | 17 ++++++------
+ 4 files changed, 35 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+index f00070f3f36c..a98991a5fdb0 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+@@ -76,6 +76,9 @@ static struct dpio_dev_list dpio_dev_list
+ 	= TAILQ_HEAD_INITIALIZER(dpio_dev_list); /*!< DPIO device list */
+ static uint32_t io_space_count;
+ 
++/* Variable to store DPAA2 platform type */
++uint32_t dpaa2_svr_family;
++
+ /*Stashing Macros default for LS208x*/
+ static int dpaa2_core_cluster_base = 0x04;
+ static int dpaa2_cluster_sz = 2;
+@@ -265,26 +268,6 @@ static int
+ dpaa2_configure_stashing(struct dpaa2_dpio_dev *dpio_dev, int cpu_id)
+ {
+ 	int sdest, ret;
+-	static int first_time;
+-
+-	/* find the SoC type for the first time */
+-	if (!first_time) {
+-		struct mc_soc_version mc_plat_info = {0};
+-
+-		if (mc_get_soc_version(dpio_dev->dpio,
+-				       CMD_PRI_LOW, &mc_plat_info)) {
+-			PMD_INIT_LOG(ERR, "\tmc_get_soc_version failed\n");
+-		} else if ((mc_plat_info.svr & 0xffff0000) == SVR_LS1080A) {
+-			dpaa2_core_cluster_base = 0x02;
+-			dpaa2_cluster_sz = 4;
+-			PMD_INIT_LOG(DEBUG, "\tLS108x (A53) Platform Detected");
+-		} else if ((mc_plat_info.svr & 0xffff0000) == SVR_LX2160A) {
+-			dpaa2_core_cluster_base = 0x00;
+-			dpaa2_cluster_sz = 2;
+-			PMD_INIT_LOG(DEBUG, "\tLX2160 Platform Detected");
+-		}
+-		first_time = 1;
+-	}
+ 
+ 	/* Set the Stashing Destination */
+ 	if (cpu_id < 0) {
+@@ -499,6 +482,25 @@ dpaa2_create_dpio_device(int vdev_fd,
+ 		rte_free(dpio_dev);
+ 	}
+ 
++	/* find the SoC type for the first time */
++	if (!dpaa2_svr_family) {
++		struct mc_soc_version mc_plat_info = {0};
++
++		if (mc_get_soc_version(dpio_dev->dpio,
++				       CMD_PRI_LOW, &mc_plat_info)) {
++			PMD_INIT_LOG(ERR, "\tmc_get_soc_version failed\n");
++		} else if ((mc_plat_info.svr & 0xffff0000) == SVR_LS1080A) {
++			dpaa2_core_cluster_base = 0x02;
++			dpaa2_cluster_sz = 4;
++			PMD_INIT_LOG(DEBUG, "\tLS108x (A53) Platform Detected");
++		} else if ((mc_plat_info.svr & 0xffff0000) == SVR_LX2160A) {
++			dpaa2_core_cluster_base = 0x00;
++			dpaa2_cluster_sz = 2;
++			PMD_INIT_LOG(DEBUG, "\tLX2160 Platform Detected");
++		}
++		dpaa2_svr_family = (mc_plat_info.svr & 0xffff0000);
++	}
++
+ 	TAILQ_INSERT_TAIL(&dpio_dev_list, dpio_dev, next);
+ 	RTE_LOG(DEBUG, PMD, "DPAA2: Added [dpio.%d]\n", object_id);
+ 
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
+index e845340c425b..a3240b2dd4a3 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
+@@ -54,6 +54,9 @@ RTE_DECLARE_PER_LCORE(struct dpaa2_io_portal_t, _dpaa2_io);
+ #define DPAA2_PER_LCORE_SEC_DPIO RTE_PER_LCORE(_dpaa2_io).sec_dpio_dev
+ #define DPAA2_PER_LCORE_SEC_PORTAL DPAA2_PER_LCORE_SEC_DPIO->sw_portal
+ 
++/* Variable to store DPAA2 platform type */
++extern uint32_t dpaa2_svr_family;
++
+ extern struct dpaa2_io_portal_t dpaa2_io_portal[RTE_MAX_LCORE];
+ 
+ struct dpaa2_dpio_dev *dpaa2_get_qbman_swp(int cpu_id);
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index a1e30d63d270..f266d6d0e664 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -93,6 +93,7 @@ DPDK_17.11 {
+ DPDK_18.02 {
+ 	global:
+ 
++	dpaa2_svr_family;
+ 	dpaa2_virt_mode;
+ 
+ } DPDK_17.11;
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 1cd302d25c77..577bd8ff9fd9 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -418,7 +418,6 @@ dpaa2_dev_rx_queue_setup(struct rte_eth_dev *dev,
+ {
+ 	struct dpaa2_dev_priv *priv = dev->data->dev_private;
+ 	struct fsl_mc_io *dpni = (struct fsl_mc_io *)priv->hw;
+-	struct mc_soc_version mc_plat_info = {0};
+ 	struct dpaa2_queue *dpaa2_q;
+ 	struct dpni_queue cfg;
+ 	uint8_t options = 0;
+@@ -450,18 +449,20 @@ dpaa2_dev_rx_queue_setup(struct rte_eth_dev *dev,
+ 
+ 	/*if ls2088 or rev2 device, enable the stashing */
+ 
+-	if (mc_get_soc_version(dpni, CMD_PRI_LOW, &mc_plat_info))
+-		PMD_INIT_LOG(ERR, "\tmc_get_soc_version failed\n");
+-
+-	if ((mc_plat_info.svr & 0xffff0000) != SVR_LS2080A) {
++	if ((dpaa2_svr_family & 0xffff0000) != SVR_LS2080A) {
+ 		options |= DPNI_QUEUE_OPT_FLC;
+ 		cfg.flc.stash_control = true;
+ 		cfg.flc.value &= 0xFFFFFFFFFFFFFFC0;
+ 		/* 00 00 00 - last 6 bit represent annotation, context stashing,
+-		 * data stashing setting 01 01 00 (0x14) to enable
+-		 * 1 line data, 1 line annotation
++		 * data stashing setting 01 01 00 (0x14)
++		 * (in following order ->DS AS CS)
++		 * to enable 1 line data, 1 line annotation.
++		 * For LX2, this setting should be 01 00 00 (0x10)
+ 		 */
+-		cfg.flc.value |= 0x14;
++		if ((dpaa2_svr_family & 0xffff0000) == SVR_LX2160A)
++			cfg.flc.value |= 0x10;
++		else
++			cfg.flc.value |= 0x14;
+ 	}
+ 	ret = dpni_set_queue(dpni, CMD_PRI_LOW, priv->token, DPNI_QUEUE_RX,
+ 			     dpaa2_q->tc_index, flow_id, options, &cfg);
+-- 
+2.14.3
+

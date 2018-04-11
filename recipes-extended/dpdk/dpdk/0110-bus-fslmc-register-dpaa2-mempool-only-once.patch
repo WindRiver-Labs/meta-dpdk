@@ -1,0 +1,37 @@
+From 50661e3b365a2244f56163df2fcb1d233b82f5f8 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 5 Feb 2018 15:33:26 +0530
+Subject: [PATCH 110/166] bus/fslmc: register dpaa2 mempool only once
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+index 84cb52471c5e..e86704ebfbef 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+@@ -65,6 +65,7 @@ dpaa2_create_dpbp_device(int vdev_fd __rte_unused,
+ {
+ 	struct dpaa2_dpbp_dev *dpbp_node;
+ 	int ret;
++	static int register_once;
+ 
+ 	/* Allocate DPAA2 dpbp handle */
+ 	dpbp_node = rte_malloc(NULL, sizeof(struct dpaa2_dpbp_dev), 0);
+@@ -101,7 +102,10 @@ dpaa2_create_dpbp_device(int vdev_fd __rte_unused,
+ 
+ 	RTE_LOG(DEBUG, PMD, "DPAA2: Added [dpbp.%d]\n", dpbp_id);
+ 
+-	rte_mbuf_register_platform_mempool_ops(DPAA2_MEMPOOL_OPS_NAME);
++	if (!register_once) {
++		rte_mbuf_register_platform_mempool_ops(DPAA2_MEMPOOL_OPS_NAME);
++		register_once = 1;
++	}
+ 
+ 	return 0;
+ }
+-- 
+2.14.3
+

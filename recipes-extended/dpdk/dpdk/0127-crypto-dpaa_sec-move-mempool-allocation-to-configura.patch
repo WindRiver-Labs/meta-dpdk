@@ -1,0 +1,117 @@
+From 464a243683376f172c323954d6685ec50347edc4 Mon Sep 17 00:00:00 2001
+From: Akhil Goyal <akhil.goyal@nxp.com>
+Date: Mon, 12 Feb 2018 17:49:10 +0530
+Subject: [PATCH 127/166] crypto/dpaa_sec: move mempool allocation to
+ configuration time
+
+Currently, the context mempools are allocated during device probe. Thus,
+even if the DPAA SEC devices are not used, any application would still
+allocate the memory required for working with the contexts.
+
+This patch moves the allocation to configuration time so that when the
+CAAM devices are configured, this allocation would be done.
+
+Primary impact of this movement is on OVS which has lower memory
+constraints for DPAA platform and ends up consuming memory impacting
+port addition.
+
+Signed-off-by: Akhil Goyal <akhil.goyal@nxp.com>
+Tested-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+DPDK-1173
+---
+ drivers/crypto/dpaa_sec/dpaa_sec.c | 45 +++++++++++++++++++++++++-------------
+ 1 file changed, 30 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.c b/drivers/crypto/dpaa_sec/dpaa_sec.c
+index 569702164650..b8a3a9dba8af 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.c
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.c
+@@ -2189,11 +2189,28 @@ dpaa_sec_security_session_destroy(void *dev __rte_unused,
+ 
+ 
+ static int
+-dpaa_sec_dev_configure(struct rte_cryptodev *dev __rte_unused,
++dpaa_sec_dev_configure(struct rte_cryptodev *dev,
+ 		       struct rte_cryptodev_config *config __rte_unused)
+ {
++
++	char str[20];
++	struct dpaa_sec_dev_private *internals;
++
+ 	PMD_INIT_FUNC_TRACE();
+ 
++	internals = dev->data->dev_private;
++	sprintf(str, "ctx_pool_%d", dev->data->dev_id);
++	internals->ctx_pool = rte_mempool_create((const char *)str,
++						CTX_POOL_NUM_BUFS,
++						CTX_POOL_BUF_SIZE,
++						CTX_POOL_CACHE_SIZE, 0,
++						NULL, NULL, NULL, NULL,
++						SOCKET_ID_ANY, 0);
++	if (!internals->ctx_pool) {
++	      RTE_LOG(ERR, PMD, "%s create failed\n", str);
++	      return -ENOMEM;
++	}
++
+ 	return 0;
+ }
+ 
+@@ -2211,9 +2228,19 @@ dpaa_sec_dev_stop(struct rte_cryptodev *dev __rte_unused)
+ }
+ 
+ static int
+-dpaa_sec_dev_close(struct rte_cryptodev *dev __rte_unused)
++dpaa_sec_dev_close(struct rte_cryptodev *dev)
+ {
++	struct dpaa_sec_dev_private *internals;
++
+ 	PMD_INIT_FUNC_TRACE();
++
++	if (dev == NULL)
++		return -ENOMEM;
++
++	internals = dev->data->dev_private;
++	rte_mempool_free(internals->ctx_pool);
++	internals->ctx_pool = NULL;
++
+ 	return 0;
+ }
+ 
+@@ -2279,6 +2306,7 @@ dpaa_sec_uninit(struct rte_cryptodev *dev)
+ 
+ 	rte_free(dev->security_ctx);
+ 
++	/* In case close has been called, internals->ctx_pool would be NULL */
+ 	rte_mempool_free(internals->ctx_pool);
+ 	rte_free(internals);
+ 
+@@ -2296,7 +2324,6 @@ dpaa_sec_dev_init(struct rte_cryptodev *cryptodev)
+ 	struct dpaa_sec_qp *qp;
+ 	uint32_t i, flags;
+ 	int ret;
+-	char str[20];
+ 
+ 	PMD_INIT_FUNC_TRACE();
+ 
+@@ -2356,18 +2383,6 @@ dpaa_sec_dev_init(struct rte_cryptodev *cryptodev)
+ 		}
+ 	}
+ 
+-	sprintf(str, "ctx_pool_%d", cryptodev->data->dev_id);
+-	internals->ctx_pool = rte_mempool_create((const char *)str,
+-			CTX_POOL_NUM_BUFS,
+-			CTX_POOL_BUF_SIZE,
+-			CTX_POOL_CACHE_SIZE, 0,
+-			NULL, NULL, NULL, NULL,
+-			SOCKET_ID_ANY, 0);
+-	if (!internals->ctx_pool) {
+-		RTE_LOG(ERR, PMD, "%s create failed\n", str);
+-		goto init_error;
+-	}
+-
+ 	PMD_INIT_LOG(DEBUG, "driver %s: created\n", cryptodev->data->name);
+ 	return 0;
+ 
+-- 
+2.14.3
+

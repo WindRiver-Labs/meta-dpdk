@@ -1,0 +1,86 @@
+From 8d85711639e6f0dee2a1fdb3175ea1302ca6bb7f Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 30 Jan 2018 12:24:36 +0530
+Subject: [PATCH 078/166] bus/dpaa: fix port order shuffling
+
+While scanning for devices, the order in which devices appear is
+different as compared to MAC sequence.
+This can cause confusion for users and automated scripts.
+This patch create a sorted list of devices.
+
+Fixes: 919eeaccb2ba ("bus/dpaa: introduce NXP DPAA bus driver skeleton")
+Cc: stable@dpdk.org
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ drivers/bus/dpaa/dpaa_bus.c | 52 +++++++++++++++++++++++++++++++++++++++++++--
+ 1 file changed, 50 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index 78e6259f7727..ef136b7ac18b 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -83,10 +83,58 @@ unsigned int dpaa_svr_family;
+ RTE_DEFINE_PER_LCORE(bool, _dpaa_io);
+ RTE_DEFINE_PER_LCORE(struct dpaa_portal_dqrr, held_bufs);
+ 
++static int
++compare_dpaa_devices(struct rte_dpaa_device *dev1,
++		     struct rte_dpaa_device *dev2)
++{
++	int comp = 0;
++
++	/* Segragating ETH from SEC devices */
++	if (dev1->device_type > dev2->device_type)
++		comp = 1;
++	else if (dev1->device_type < dev2->device_type)
++		comp = -1;
++	else
++		comp = 0;
++
++	if ((comp != 0) || (dev1->device_type != FSL_DPAA_ETH))
++		return comp;
++
++	if (dev1->id.fman_id > dev2->id.fman_id) {
++		comp = 1;
++	} else if (dev1->id.fman_id < dev2->id.fman_id) {
++		comp = -1;
++	} else {
++		/* FMAN ids match, check for mac_id */
++		if (dev1->id.mac_id > dev2->id.mac_id)
++			comp = 1;
++		else if (dev1->id.mac_id < dev2->id.mac_id)
++			comp = -1;
++		else
++			comp = 0;
++	}
++
++	return comp;
++}
++
+ static inline void
+-dpaa_add_to_device_list(struct rte_dpaa_device *dev)
++dpaa_add_to_device_list(struct rte_dpaa_device *newdev)
+ {
+-	TAILQ_INSERT_TAIL(&rte_dpaa_bus.device_list, dev, next);
++	int comp, inserted = 0;
++	struct rte_dpaa_device *dev = NULL;
++	struct rte_dpaa_device *tdev = NULL;
++
++	TAILQ_FOREACH_SAFE(dev, &rte_dpaa_bus.device_list, next, tdev) {
++		comp = compare_dpaa_devices(newdev, dev);
++		if (comp < 0) {
++			TAILQ_INSERT_BEFORE(dev, newdev, next);
++			inserted = 1;
++			break;
++		}
++	}
++
++	if (!inserted)
++		TAILQ_INSERT_TAIL(&rte_dpaa_bus.device_list, newdev, next);
+ }
+ 
+ static inline void
+-- 
+2.14.3
+

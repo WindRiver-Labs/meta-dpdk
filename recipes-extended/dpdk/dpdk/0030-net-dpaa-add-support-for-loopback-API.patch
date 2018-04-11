@@ -1,0 +1,185 @@
+From 0a6de1c37d3d2f519d64df5da05bea84da89b0ed Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Wed, 30 Aug 2017 18:28:49 +0530
+Subject: [PATCH 030/166] net/dpaa: add support for loopback API
+
+PMD specific API is being added as an EXPERIMENTAL API
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ doc/api/doxy-api-index.md                 |  1 +
+ doc/api/doxy-api.conf                     |  1 +
+ drivers/net/dpaa/Makefile                 |  3 +++
+ drivers/net/dpaa/dpaa_ethdev.c            | 42 +++++++++++++++++++++++++++++++
+ drivers/net/dpaa/rte_pmd_dpaa.h           | 39 ++++++++++++++++++++++++++++
+ drivers/net/dpaa/rte_pmd_dpaa_version.map |  8 ++++++
+ 6 files changed, 94 insertions(+)
+ create mode 100644 drivers/net/dpaa/rte_pmd_dpaa.h
+
+diff --git a/doc/api/doxy-api-index.md b/doc/api/doxy-api-index.md
+index 34927023f2ce..38314afe0402 100644
+--- a/doc/api/doxy-api-index.md
++++ b/doc/api/doxy-api-index.md
+@@ -60,6 +60,7 @@ The public API headers are grouped by topics:
+   [ixgbe]              (@ref rte_pmd_ixgbe.h),
+   [i40e]               (@ref rte_pmd_i40e.h),
+   [bnxt]               (@ref rte_pmd_bnxt.h),
++  [dpaa]               (@ref rte_pmd_dpaa.h),
+   [crypto_scheduler]   (@ref rte_cryptodev_scheduler.h)
+ 
+ - **memory**:
+diff --git a/doc/api/doxy-api.conf b/doc/api/doxy-api.conf
+index b2cbe940fa76..09e323261be9 100644
+--- a/doc/api/doxy-api.conf
++++ b/doc/api/doxy-api.conf
+@@ -33,6 +33,7 @@ INPUT                   = doc/api/doxy-api-index.md \
+                           drivers/crypto/scheduler \
+                           drivers/net/bnxt \
+                           drivers/net/bonding \
++                          drivers/net/dpaa \
+                           drivers/net/i40e \
+                           drivers/net/ixgbe \
+                           drivers/net/softnic \
+diff --git a/drivers/net/dpaa/Makefile b/drivers/net/dpaa/Makefile
+index 171686ecf908..a99d1ee31236 100644
+--- a/drivers/net/dpaa/Makefile
++++ b/drivers/net/dpaa/Makefile
+@@ -60,4 +60,7 @@ LDLIBS += -lrte_mempool_dpaa
+ LDLIBS += -lrte_eal -lrte_mbuf -lrte_mempool -lrte_ring
+ LDLIBS += -lrte_ethdev -lrte_net -lrte_kvargs
+ 
++# install this header file
++SYMLINK-$(CONFIG_RTE_LIBRTE_DPAA_PMD)-include := rte_pmd_dpaa.h
++
+ include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index efea676ae6fe..ce1fce6e3f40 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -64,6 +64,7 @@
+ 
+ #include <dpaa_ethdev.h>
+ #include <dpaa_rxtx.h>
++#include <rte_pmd_dpaa.h>
+ 
+ #include <fsl_usd.h>
+ #include <fsl_qman.h>
+@@ -110,6 +111,8 @@ static const struct rte_dpaa_xstats_name_off dpaa_xstats_strings[] = {
+ 		offsetof(struct dpaa_if_stats, tund)},
+ };
+ 
++static struct rte_dpaa_driver rte_dpaa_pmd;
++
+ static int
+ dpaa_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
+ {
+@@ -733,6 +736,45 @@ static struct eth_dev_ops dpaa_devops = {
+ 	.fw_version_get		  = dpaa_fw_version_get,
+ };
+ 
++static bool
++is_device_supported(struct rte_eth_dev *dev, struct rte_dpaa_driver *drv)
++{
++	if (strcmp(dev->device->driver->name,
++		   drv->driver.name))
++		return false;
++
++	return true;
++}
++
++static bool
++is_dpaa_supported(struct rte_eth_dev *dev)
++{
++	return is_device_supported(dev, &rte_dpaa_pmd);
++}
++
++int
++rte_pmd_dpaa_set_tx_loopback(uint8_t port, uint8_t on)
++{
++	struct rte_eth_dev *dev;
++	struct dpaa_if *dpaa_intf;
++
++	RTE_ETH_VALID_PORTID_OR_ERR_RET(port, -ENODEV);
++
++	dev = &rte_eth_devices[port];
++
++	if (!is_dpaa_supported(dev))
++		return -ENOTSUP;
++
++	dpaa_intf = dev->data->dev_private;
++
++	if (on)
++		fman_if_loopback_enable(dpaa_intf->fif);
++	else
++		fman_if_loopback_disable(dpaa_intf->fif);
++
++	return 0;
++}
++
+ static int dpaa_fc_set_default(struct dpaa_if *dpaa_intf)
+ {
+ 	struct rte_eth_fc_conf *fc_conf;
+diff --git a/drivers/net/dpaa/rte_pmd_dpaa.h b/drivers/net/dpaa/rte_pmd_dpaa.h
+new file mode 100644
+index 000000000000..9614be84efb6
+--- /dev/null
++++ b/drivers/net/dpaa/rte_pmd_dpaa.h
+@@ -0,0 +1,39 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2018 NXP
++ */
++
++#ifndef _PMD_DPAA_H_
++#define _PMD_DPAA_H_
++
++/**
++ * @file rte_pmd_dpaa.h
++ *
++ * NXP dpaa PMD specific functions.
++ *
++ * @warning
++ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
++ *
++ */
++
++#include <rte_ethdev.h>
++
++/**
++ * @warning
++ * @b EXPERIMENTAL: this API may change, or be removed, without prior notice
++ *
++ * Enable/Disable TX loopback
++ *
++ * @param port
++ *    The port identifier of the Ethernet device.
++ * @param on
++ *    1 - Enable TX loopback.
++ *    0 - Disable TX loopback.
++ * @return
++ *   - (0) if successful.
++ *   - (-ENODEV) if *port* invalid.
++ *   - (-EINVAL) if bad parameter.
++ */
++int
++rte_pmd_dpaa_set_tx_loopback(uint8_t port, uint8_t on);
++
++#endif /* _PMD_DPAA_H_ */
+diff --git a/drivers/net/dpaa/rte_pmd_dpaa_version.map b/drivers/net/dpaa/rte_pmd_dpaa_version.map
+index a70bd197b771..d1f3ea4b880b 100644
+--- a/drivers/net/dpaa/rte_pmd_dpaa_version.map
++++ b/drivers/net/dpaa/rte_pmd_dpaa_version.map
+@@ -2,3 +2,11 @@ DPDK_17.11 {
+ 
+ 	local: *;
+ };
++
++EXPERIMENTAL {
++	global:
++
++	rte_pmd_dpaa_set_tx_loopback;
++
++	local: *;
++} DPDK_17.11;
+-- 
+2.14.3
+

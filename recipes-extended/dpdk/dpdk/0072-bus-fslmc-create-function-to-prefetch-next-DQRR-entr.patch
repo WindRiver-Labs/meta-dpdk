@@ -1,0 +1,67 @@
+From 9704fb142c05c0f8625931f86ff66c88e7e2a328 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 19:25:10 +0530
+Subject: [PATCH 072/166] bus/fslmc: create function to prefetch next DQRR
+ entry
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h |  6 ++++++
+ drivers/bus/fslmc/qbman/qbman_portal.c             | 11 +++++++++++
+ drivers/bus/fslmc/rte_bus_fslmc_version.map        |  1 +
+ 3 files changed, 18 insertions(+)
+
+diff --git a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+index da0c69491af9..b664c19fc78f 100644
+--- a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
++++ b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+@@ -402,6 +402,12 @@ int qbman_swp_pull(struct qbman_swp *s, struct qbman_pull_desc *d);
+  */
+ const struct qbman_result *qbman_swp_dqrr_next(struct qbman_swp *p);
+ 
++/**
++ * qbman_swp_prefetch_dqrr_next() - prefetch the next DQRR entry.
++ * @s: the software portal object.
++ */
++void qbman_swp_prefetch_dqrr_next(struct qbman_swp *s);
++
+ /**
+  * qbman_swp_dqrr_consume() -  Consume DQRR entries previously returned from
+  * qbman_swp_dqrr_next().
+diff --git a/drivers/bus/fslmc/qbman/qbman_portal.c b/drivers/bus/fslmc/qbman/qbman_portal.c
+index d3023d98b10f..24a3ec173a6c 100644
+--- a/drivers/bus/fslmc/qbman/qbman_portal.c
++++ b/drivers/bus/fslmc/qbman/qbman_portal.c
+@@ -801,6 +801,17 @@ int qbman_swp_pull(struct qbman_swp *s, struct qbman_pull_desc *d)
+ #define QBMAN_RESULT_BPSCN     0x29
+ #define QBMAN_RESULT_CSCN_WQ   0x2a
+ 
++#include <rte_prefetch.h>
++
++void qbman_swp_prefetch_dqrr_next(struct qbman_swp *s)
++{
++	const struct qbman_result *p;
++
++	p = qbman_cena_read_wo_shadow(&s->sys,
++		QBMAN_CENA_SWP_DQRR(s->dqrr.next_idx));
++	rte_prefetch0(p);
++}
++
+ /* NULL return if there are no unconsumed DQRR entries. Returns a DQRR entry
+  * only once, so repeated calls can return a sequence of DQRR entries, without
+  * requiring they be consumed immediately or in any particular order.
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index 09ec05f6e82a..3f1ba130cc55 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -99,6 +99,7 @@ DPDK_18.02 {
+ 	qbman_fq_query_state;
+ 	qbman_fq_state_frame_count;
+ 	qbman_swp_dqrr_idx_consume;
++	qbman_swp_prefetch_dqrr_next;
+ 	rte_fslmc_get_device_count;
+ 
+ } DPDK_17.11;
+-- 
+2.14.3
+

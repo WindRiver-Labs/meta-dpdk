@@ -1,0 +1,65 @@
+From c01e69d0513bee906e222af205cb515cc877ac5f Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Fri, 19 Jan 2018 22:39:19 +0530
+Subject: [PATCH 105/166] PVT: net/dpaa: enhance errata workaround for LS1043
+
+If fd_offset is not a multiple of 16 and alligned to 16 bytes,
+a known errata for LS1043 gets hit due to which the I/O stops.
+This patch adds a workaround so that fd_offset is always 16
+bytes alligned
+---
+ drivers/net/dpaa/dpaa_rxtx.c | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 1fa4785d8207..81a1c3220f3e 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -865,7 +865,7 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 	struct qm_fd fd_arr[DPAA_TX_BURST_SIZE];
+ 	uint32_t frames_to_send, loop, sent = 0;
+ 	uint16_t state;
+-	int ret;
++	int ret, realloc_mbuf = 0;
+ 	uint32_t seqn, index, flags[DPAA_TX_BURST_SIZE] = {0};
+ 
+ 	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
+@@ -883,12 +883,17 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 				DPAA_TX_BURST_SIZE : nb_bufs;
+ 		for (loop = 0; loop < frames_to_send; loop++) {
+ 			mbuf = *(bufs++);
++			if (dpaa_svr_family == SVR_LS1043A_FAMILY &&
++					(mbuf->data_off & 0xF) != 0x0)
++				realloc_mbuf = 1;
++
+ 			if (likely(RTE_MBUF_DIRECT(mbuf))) {
+ 				mp = mbuf->pool;
+ 				bp_info = DPAA_MEMPOOL_TO_POOL_INFO(mp);
+ 				if (likely(mp->ops_index ==
+ 						bp_info->dpaa_ops_index &&
+ 					mbuf->nb_segs == 1 &&
++					realloc_mbuf == 0 &&
+ 					rte_mbuf_refcnt_read(mbuf) == 1)) {
+ 					DPAA_MBUF_TO_CONTIG_FD(mbuf,
+ 						&fd_arr[loop], bp_info->bpid);
+@@ -904,7 +909,8 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 			}
+ 
+ 			bp_info = DPAA_MEMPOOL_TO_POOL_INFO(mp);
+-			if (likely(mp->ops_index == bp_info->dpaa_ops_index)) {
++			if (likely(mp->ops_index == bp_info->dpaa_ops_index &&
++					realloc_mbuf == 0)) {
+ 				state = tx_on_dpaa_pool(mbuf, bp_info,
+ 							&fd_arr[loop]);
+ 				if (unlikely(state)) {
+@@ -917,6 +923,7 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 					goto send_pkts;
+ 				}
+ 			} else {
++				realloc_mbuf = 0;
+ 				state = tx_on_external_pool(q, mbuf,
+ 							    &fd_arr[loop]);
+ 				if (unlikely(state)) {
+-- 
+2.14.3
+

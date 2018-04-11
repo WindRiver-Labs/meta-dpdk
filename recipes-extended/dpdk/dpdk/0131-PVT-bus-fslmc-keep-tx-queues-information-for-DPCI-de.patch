@@ -1,0 +1,151 @@
+From ea4038b09b3c28c3982279a7cbd545c5e62ea08a Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 14 Feb 2018 16:02:40 +0530
+Subject: [PATCH 131/166] PVT: bus/fslmc: keep tx queues information for DPCI
+ devices too
+
+The DPCI devices have oth Tx and Rx queues. Event devices use
+DPCI Rx queues only, but CMDIF (AIOP) uses both Tx and Rx queues.
+This patch enables Tx queues configuration too.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_dpci.c | 57 ++++++++++++++++++++++++++------
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h  |  3 +-
+ drivers/event/dpaa2/dpaa2_eventdev.c     | 10 +++---
+ 3 files changed, 53 insertions(+), 17 deletions(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
+index 05f04bea3fe3..15b173d02e2a 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
+@@ -65,6 +65,7 @@ rte_dpaa2_create_dpci_device(int vdev_fd __rte_unused,
+ 	struct dpci_attr attr;
+ 	struct dpci_rx_queue_cfg rx_queue_cfg;
+ 	struct dpci_rx_queue_attr rx_attr;
++	struct dpci_tx_queue_attr tx_attr;
+ 	int ret, i;
+ 
+ 	/* Allocate DPAA2 dpci handle */
+@@ -96,16 +97,38 @@ rte_dpaa2_create_dpci_device(int vdev_fd __rte_unused,
+ 	}
+ 
+ 	/* Set up the Rx Queue */
+-	memset(&rx_queue_cfg, 0, sizeof(struct dpci_rx_queue_cfg));
+-	ret = dpci_set_rx_queue(&dpci_node->dpci,
+-				CMD_PRI_LOW,
+-				dpci_node->token,
+-				0, &rx_queue_cfg);
+-	if (ret) {
+-		PMD_INIT_LOG(ERR, "Setting Rx queue failed with err code: %d",
+-			     ret);
+-		rte_free(dpci_node);
+-		return -1;
++	for (i = 0; i < DPAA2_DPCI_MAX_QUEUES; i++) {
++		struct dpaa2_queue *rxq;
++
++		memset(&rx_queue_cfg, 0, sizeof(struct dpci_rx_queue_cfg));
++		ret = dpci_set_rx_queue(&dpci_node->dpci,
++					CMD_PRI_LOW,
++					dpci_node->token,
++					i, &rx_queue_cfg);
++		if (ret) {
++			PMD_INIT_LOG(ERR, "Setting Rx queue failed with err code: %d",
++				     ret);
++			rte_free(dpci_node);
++			return -1;
++		}
++
++		/* Allocate DQ storage for the DPCI Rx queues */
++		rxq = &(dpci_node->rx_queue[i]);
++		rxq->q_storage = rte_malloc("dq_storage",
++					sizeof(struct queue_storage_info_t),
++					RTE_CACHE_LINE_SIZE);
++		if (!rxq->q_storage) {
++			PMD_INIT_LOG(ERR, "q_storage allocation failed\n");
++			rte_free(dpci_node);
++			return -ENOMEM;
++		}
++
++		memset(rxq->q_storage, 0, sizeof(struct queue_storage_info_t));
++		if (dpaa2_alloc_dq_storage(rxq->q_storage)) {
++			PMD_INIT_LOG(ERR, "dpaa2_alloc_dq_storage failed\n");
++			rte_free(dpci_node);
++			return -ENOMEM;
++		}
+ 	}
+ 
+ 	/* Enable the device */
+@@ -131,8 +154,20 @@ rte_dpaa2_create_dpci_device(int vdev_fd __rte_unused,
+ 			rte_free(dpci_node);
+ 			return -1;
+ 		}
++		dpci_node->rx_queue[i].fqid = rx_attr.fqid;
+ 
+-		dpci_node->queue[i].fqid = rx_attr.fqid;
++		ret = dpci_get_tx_queue(&dpci_node->dpci,
++					CMD_PRI_LOW,
++					dpci_node->token, i,
++					&tx_attr);
++		if (ret != 0) {
++			PMD_INIT_LOG(ERR,
++				     "Reading device failed with err code: %d",
++				ret);
++			rte_free(dpci_node);
++			return -1;
++		}
++		dpci_node->tx_queue[i].fqid = tx_attr.fqid;
+ 	}
+ 
+ 	dpci_node->dpci_id = dpci_id;
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index bd6926dac8d1..ac80be81e3c7 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -168,7 +168,8 @@ struct dpaa2_dpci_dev {
+ 	uint16_t token;
+ 	rte_atomic16_t in_use;
+ 	uint32_t dpci_id; /*HW ID for DPCI object */
+-	struct dpaa2_queue queue[DPAA2_DPCI_MAX_QUEUES];
++	struct dpaa2_queue rx_queue[DPAA2_DPCI_MAX_QUEUES];
++	struct dpaa2_queue tx_queue[DPAA2_DPCI_MAX_QUEUES];
+ };
+ 
+ /*! Global MCP list */
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index 05bea1da698c..eec5a1917711 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -113,10 +113,10 @@ dpaa2_eventdev_enqueue_burst(void *port, const struct rte_event ev[],
+ 			const struct rte_event *event = &ev[num_tx + loop];
+ 
+ 			if (event->sched_type != RTE_SCHED_TYPE_ATOMIC)
+-				fqid = evq_info->dpci->queue[
++				fqid = evq_info->dpci->rx_queue[
+ 					DPAA2_EVENT_DPCI_PARALLEL_QUEUE].fqid;
+ 			else
+-				fqid = evq_info->dpci->queue[
++				fqid = evq_info->dpci->rx_queue[
+ 					DPAA2_EVENT_DPCI_ATOMIC_QUEUE].fqid;
+ 
+ 			/* Prepare enqueue descriptor */
+@@ -751,13 +751,13 @@ dpaa2_eventdev_setup_dpci(struct dpaa2_dpci_dev *dpci_dev,
+ 	rx_queue_cfg.dest_cfg.dest_id = dpcon_dev->dpcon_id;
+ 	rx_queue_cfg.dest_cfg.priority = DPAA2_EVENT_DEFAULT_DPCI_PRIO;
+ 
+-	dpci_dev->queue[DPAA2_EVENT_DPCI_PARALLEL_QUEUE].cb =
++	dpci_dev->rx_queue[DPAA2_EVENT_DPCI_PARALLEL_QUEUE].cb =
+ 		dpaa2_eventdev_process_parallel;
+-	dpci_dev->queue[DPAA2_EVENT_DPCI_ATOMIC_QUEUE].cb =
++	dpci_dev->rx_queue[DPAA2_EVENT_DPCI_ATOMIC_QUEUE].cb =
+ 		dpaa2_eventdev_process_atomic;
+ 
+ 	for (i = 0 ; i < DPAA2_EVENT_DPCI_MAX_QUEUES; i++) {
+-		rx_queue_cfg.user_ctx = (uint64_t)(&dpci_dev->queue[i]);
++		rx_queue_cfg.user_ctx = (uint64_t)(&dpci_dev->rx_queue[i]);
+ 		ret = dpci_set_rx_queue(&dpci_dev->dpci,
+ 					CMD_PRI_LOW,
+ 					dpci_dev->token, i,
+-- 
+2.14.3
+

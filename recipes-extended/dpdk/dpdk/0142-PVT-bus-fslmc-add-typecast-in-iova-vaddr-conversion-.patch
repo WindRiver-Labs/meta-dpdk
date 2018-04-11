@@ -1,0 +1,29 @@
+From fcf0685872a969aeee524816d7485eb87e75ba61 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 20 Feb 2018 12:43:54 +0530
+Subject: [PATCH 142/166] PVT: bus/fslmc: add typecast in iova-vaddr conversion
+ macros
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index 80f5e2da9d6e..3ae69f19c1b8 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -358,8 +358,8 @@ static phys_addr_t dpaa2_mem_vtop(uint64_t vaddr)
+ 
+ #define DPAA2_MBUF_VADDR_TO_IOVA(mbuf) ((mbuf)->buf_addr)
+ #define DPAA2_OP_VADDR_TO_IOVA(op) (op)
+-#define DPAA2_VADDR_TO_IOVA(_vaddr) (_vaddr)
+-#define DPAA2_IOVA_TO_VADDR(_iova) (_iova)
++#define DPAA2_VADDR_TO_IOVA(_vaddr) ((phys_addr_t)(_vaddr))
++#define DPAA2_IOVA_TO_VADDR(_iova) ((void *)(_iova))
+ #define DPAA2_MODIFY_IOVA_TO_VADDR(_mem, _type)
+ 
+ #endif /* RTE_LIBRTE_DPAA2_USE_PHYS_IOVA */
+-- 
+2.14.3
+

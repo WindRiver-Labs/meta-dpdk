@@ -1,0 +1,117 @@
+From 07bdcde2e4a6f56b8d62c27c7acccaa366965dcd Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 3 Jan 2018 23:34:40 +0530
+Subject: [PATCH 051/166] bus/fslmc: add flag to configure DCA in QBMAN multi
+ Tx
+
+With the current QBMAN multi-tx API, we need to create separate
+enqueue descriptors for each of the packet which is required to
+be enqueued to the hardware, once we support Atomic Queues
+(with DCA) in dpaa2 drivers. Creating enqueue descriptor for
+each packet is costly and have significant performance impact.
+This patch introduces a flag parameter in the QBMAN multi-tx API,
+so that DCA configuration (and later on ORP/ODP for ordered queues)
+can be passed using flags and be updated in the EQCR using this flag.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h | 5 +++++
+ drivers/bus/fslmc/qbman/qbman_portal.c             | 7 +++++++
+ drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c        | 1 +
+ drivers/net/dpaa2/dpaa2_rxtx.c                     | 6 ++++--
+ 4 files changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+index efa486183d1a..da0c69491af9 100644
+--- a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
++++ b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+@@ -588,6 +588,9 @@ int qbman_result_is_FQPN(const struct qbman_result *dq);
+ /* volatile dequeue command is expired */
+ #define QBMAN_DQ_STAT_EXPIRED       0x01
+ 
++#define QBMAN_EQCR_DCA_IDXMASK		0x0f
++#define QBMAN_ENQUEUE_FLAG_DCA		(1ULL << 31)
++
+ /**
+  * qbman_result_DQ_flags() - Get the STAT field of dequeue response
+  * @dq: the dequeue result.
+@@ -971,6 +974,7 @@ int qbman_swp_enqueue(struct qbman_swp *s, const struct qbman_eq_desc *d,
+  * @s: the software portal used for enqueue.
+  * @d: the enqueue descriptor.
+  * @fd: the frame descriptor to be enqueued.
++ * @flags: bit-mask of QBMAN_ENQUEUE_FLAG_*** options
+  * @num_frames: the number of the frames to be enqueued.
+  *
+  * Return the number of enqueued frames, -EBUSY if the EQCR is not ready.
+@@ -978,6 +982,7 @@ int qbman_swp_enqueue(struct qbman_swp *s, const struct qbman_eq_desc *d,
+ int qbman_swp_enqueue_multiple(struct qbman_swp *s,
+ 			       const struct qbman_eq_desc *d,
+ 			       const struct qbman_fd *fd,
++			       uint32_t *flags,
+ 			       int num_frames);
+ /**
+  * qbman_swp_enqueue_multiple_desc() - Enqueue multiple frames with
+diff --git a/drivers/bus/fslmc/qbman/qbman_portal.c b/drivers/bus/fslmc/qbman/qbman_portal.c
+index 314a70e88e8c..d3023d98b10f 100644
+--- a/drivers/bus/fslmc/qbman/qbman_portal.c
++++ b/drivers/bus/fslmc/qbman/qbman_portal.c
+@@ -518,6 +518,7 @@ int qbman_swp_enqueue(struct qbman_swp *s, const struct qbman_eq_desc *d,
+ int qbman_swp_enqueue_multiple(struct qbman_swp *s,
+ 			       const struct qbman_eq_desc *d,
+ 			       const struct qbman_fd *fd,
++			       uint32_t *flags,
+ 			       int num_frames)
+ {
+ 	uint32_t *p;
+@@ -560,6 +561,12 @@ int qbman_swp_enqueue_multiple(struct qbman_swp *s,
+ 		p = qbman_cena_write_start_wo_shadow(&s->sys,
+ 					QBMAN_CENA_SWP_EQCR(eqcr_pi & 7));
+ 		p[0] = cl[0] | s->eqcr.pi_vb;
++		if (flags && (flags[i] & QBMAN_ENQUEUE_FLAG_DCA)) {
++			struct qbman_eq_desc *d = (struct qbman_eq_desc *)p;
++
++			d->eq.dca = (1 << QB_ENQUEUE_CMD_DCA_EN_SHIFT) |
++				((flags[i]) & QBMAN_EQCR_DCA_IDXMASK);
++		}
+ 		eqcr_pi++;
+ 		eqcr_pi &= 0xF;
+ 		if (!(eqcr_pi & 7))
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+index 999e7d831bf4..22950ab4adc4 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+@@ -699,6 +699,7 @@ dpaa2_sec_enqueue_burst(void *qp, struct rte_crypto_op **ops,
+ 		while (loop < frames_to_send) {
+ 			loop += qbman_swp_enqueue_multiple(swp, &eqdesc,
+ 							&fd_arr[loop],
++							NULL,
+ 							frames_to_send - loop);
+ 		}
+ 
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 9b66bd324212..6c4fddbe0ec2 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -787,7 +787,8 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 		loop = 0;
+ 		while (loop < frames_to_send) {
+ 			loop += qbman_swp_enqueue_multiple(swp, &eqdesc,
+-					&fd_arr[loop], frames_to_send - loop);
++					&fd_arr[loop], NULL,
++					frames_to_send - loop);
+ 		}
+ 
+ 		num_tx += frames_to_send;
+@@ -803,7 +804,8 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 
+ 		while (i < loop) {
+ 			i += qbman_swp_enqueue_multiple(swp, &eqdesc,
+-							&fd_arr[i], loop - i);
++							&fd_arr[i], NULL,
++							loop - i);
+ 		}
+ 		num_tx += loop;
+ 	}
+-- 
+2.14.3
+

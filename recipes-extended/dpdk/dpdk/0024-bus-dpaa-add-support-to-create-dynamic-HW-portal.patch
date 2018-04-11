@@ -1,0 +1,572 @@
+From a2b4064b9bfa7f680d34e661ce30d8eeebfbff22 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Wed, 6 Dec 2017 18:28:03 +0530
+Subject: [PATCH 024/166] bus/dpaa: add support to create dynamic HW portal
+
+HW portal is a processing context in DPAA. This patch allow
+creation of a queue specific HW portal context.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c        |  69 ++++++++++++--
+ drivers/bus/dpaa/base/qbman/qman_driver.c | 153 +++++++++++++++++++++++++-----
+ drivers/bus/dpaa/base/qbman/qman_priv.h   |   6 +-
+ drivers/bus/dpaa/dpaa_bus.c               |  31 +++++-
+ drivers/bus/dpaa/include/fsl_qman.h       |  25 ++---
+ drivers/bus/dpaa/include/fsl_usd.h        |   4 +
+ drivers/bus/dpaa/include/process.h        |  11 ++-
+ drivers/bus/dpaa/rte_bus_dpaa_version.map |   2 +
+ drivers/bus/dpaa/rte_dpaa_bus.h           |   4 +
+ 9 files changed, 252 insertions(+), 53 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index 98e0ecd29498..46f43c29cd63 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -654,11 +654,52 @@ struct qman_portal *qman_create_portal(
+ 	return NULL;
+ }
+ 
++#define MAX_GLOBAL_PORTALS 8
++static struct qman_portal global_portals[MAX_GLOBAL_PORTALS];
++static int global_portals_used[MAX_GLOBAL_PORTALS];
++
++static struct qman_portal *
++qman_alloc_global_portal(void)
++{
++	unsigned int i;
++
++	for (i = 0; i < MAX_GLOBAL_PORTALS; i++) {
++		if (global_portals_used[i] == 0) {
++			global_portals_used[i] = 1;
++			return &global_portals[i];
++		}
++	}
++	pr_err("No portal available (%x)\n", MAX_GLOBAL_PORTALS);
++
++	return NULL;
++}
++
++static int
++qman_free_global_portal(struct qman_portal *portal)
++{
++	unsigned int i;
++
++	for (i = 0; i < MAX_GLOBAL_PORTALS; i++) {
++		if (&global_portals[i] == portal) {
++			global_portals_used[i] = 0;
++			return 0;
++		}
++	}
++	return -1;
++}
++
+ struct qman_portal *qman_create_affine_portal(const struct qm_portal_config *c,
+-					      const struct qman_cgrs *cgrs)
++					      const struct qman_cgrs *cgrs,
++					      int alloc)
+ {
+ 	struct qman_portal *res;
+-	struct qman_portal *portal = get_affine_portal();
++	struct qman_portal *portal;
++
++	if (alloc)
++		portal = qman_alloc_global_portal();
++	else
++		portal = get_affine_portal();
++
+ 	/* A criteria for calling this function (from qman_driver.c) is that
+ 	 * we're already affine to the cpu and won't schedule onto another cpu.
+ 	 */
+@@ -708,13 +749,18 @@ void qman_destroy_portal(struct qman_portal *qm)
+ 	spin_lock_destroy(&qm->cgr_lock);
+ }
+ 
+-const struct qm_portal_config *qman_destroy_affine_portal(void)
++const struct qm_portal_config *
++qman_destroy_affine_portal(struct qman_portal *qp)
+ {
+ 	/* We don't want to redirect if we're a slave, use "raw" */
+-	struct qman_portal *qm = get_affine_portal();
++	struct qman_portal *qm;
+ 	const struct qm_portal_config *pcfg;
+ 	int cpu;
+ 
++	if (qp == NULL)
++		qm = get_affine_portal();
++	else
++		qm = qp;
+ 	pcfg = qm->config;
+ 	cpu = pcfg->cpu;
+ 
+@@ -723,6 +769,9 @@ const struct qm_portal_config *qman_destroy_affine_portal(void)
+ 	spin_lock(&affine_mask_lock);
+ 	CPU_CLR(cpu, &affine_mask);
+ 	spin_unlock(&affine_mask_lock);
++
++	qman_free_global_portal(qm);
++
+ 	return pcfg;
+ }
+ 
+@@ -1129,27 +1178,27 @@ void qman_start_dequeues(void)
+ 		qm_dqrr_set_maxfill(&p->p, DQRR_MAXFILL);
+ }
+ 
+-void qman_static_dequeue_add(u32 pools)
++void qman_static_dequeue_add(u32 pools, struct qman_portal *qp)
+ {
+-	struct qman_portal *p = get_affine_portal();
++	struct qman_portal *p = qp ? qp : get_affine_portal();
+ 
+ 	pools &= p->config->pools;
+ 	p->sdqcr |= pools;
+ 	qm_dqrr_sdqcr_set(&p->p, p->sdqcr);
+ }
+ 
+-void qman_static_dequeue_del(u32 pools)
++void qman_static_dequeue_del(u32 pools, struct qman_portal *qp)
+ {
+-	struct qman_portal *p = get_affine_portal();
++	struct qman_portal *p = qp ? qp : get_affine_portal();
+ 
+ 	pools &= p->config->pools;
+ 	p->sdqcr &= ~pools;
+ 	qm_dqrr_sdqcr_set(&p->p, p->sdqcr);
+ }
+ 
+-u32 qman_static_dequeue_get(void)
++u32 qman_static_dequeue_get(struct qman_portal *qp)
+ {
+-	struct qman_portal *p = get_affine_portal();
++	struct qman_portal *p = qp ? qp : get_affine_portal();
+ 	return p->sdqcr;
+ }
+ 
+diff --git a/drivers/bus/dpaa/base/qbman/qman_driver.c b/drivers/bus/dpaa/base/qbman/qman_driver.c
+index 7a688967eff8..f5d4b3794db1 100644
+--- a/drivers/bus/dpaa/base/qbman/qman_driver.c
++++ b/drivers/bus/dpaa/base/qbman/qman_driver.c
+@@ -57,8 +57,8 @@ void *qman_ccsr_map;
+ /* The qman clock frequency */
+ u32 qman_clk;
+ 
+-static __thread int fd = -1;
+-static __thread struct qm_portal_config pcfg;
++static __thread int qmfd = -1;
++static __thread struct qm_portal_config qpcfg;
+ static __thread struct dpaa_ioctl_portal_map map = {
+ 	.type = dpaa_portal_qman
+ };
+@@ -77,16 +77,16 @@ static int fsl_qman_portal_init(uint32_t index, int is_shared)
+ 		error(0, ret, "pthread_getaffinity_np()");
+ 		return ret;
+ 	}
+-	pcfg.cpu = -1;
++	qpcfg.cpu = -1;
+ 	for (loop = 0; loop < CPU_SETSIZE; loop++)
+ 		if (CPU_ISSET(loop, &cpuset)) {
+-			if (pcfg.cpu != -1) {
++			if (qpcfg.cpu != -1) {
+ 				pr_err("Thread is not affine to 1 cpu\n");
+ 				return -EINVAL;
+ 			}
+-			pcfg.cpu = loop;
++			qpcfg.cpu = loop;
+ 		}
+-	if (pcfg.cpu == -1) {
++	if (qpcfg.cpu == -1) {
+ 		pr_err("Bug in getaffinity handling!\n");
+ 		return -EINVAL;
+ 	}
+@@ -98,36 +98,36 @@ static int fsl_qman_portal_init(uint32_t index, int is_shared)
+ 		error(0, ret, "process_portal_map()");
+ 		return ret;
+ 	}
+-	pcfg.channel = map.channel;
+-	pcfg.pools = map.pools;
+-	pcfg.index = map.index;
++	qpcfg.channel = map.channel;
++	qpcfg.pools = map.pools;
++	qpcfg.index = map.index;
+ 
+ 	/* Make the portal's cache-[enabled|inhibited] regions */
+-	pcfg.addr_virt[DPAA_PORTAL_CE] = map.addr.cena;
+-	pcfg.addr_virt[DPAA_PORTAL_CI] = map.addr.cinh;
++	qpcfg.addr_virt[DPAA_PORTAL_CE] = map.addr.cena;
++	qpcfg.addr_virt[DPAA_PORTAL_CI] = map.addr.cinh;
+ 
+-	fd = open(QMAN_PORTAL_IRQ_PATH, O_RDONLY);
+-	if (fd == -1) {
++	qmfd = open(QMAN_PORTAL_IRQ_PATH, O_RDONLY);
++	if (qmfd == -1) {
+ 		pr_err("QMan irq init failed\n");
+ 		process_portal_unmap(&map.addr);
+ 		return -EBUSY;
+ 	}
+ 
+-	pcfg.is_shared = is_shared;
+-	pcfg.node = NULL;
+-	pcfg.irq = fd;
++	qpcfg.is_shared = is_shared;
++	qpcfg.node = NULL;
++	qpcfg.irq = qmfd;
+ 
+-	portal = qman_create_affine_portal(&pcfg, NULL);
++	portal = qman_create_affine_portal(&qpcfg, NULL, 0);
+ 	if (!portal) {
+ 		pr_err("Qman portal initialisation failed (%d)\n",
+-		       pcfg.cpu);
++		       qpcfg.cpu);
+ 		process_portal_unmap(&map.addr);
+ 		return -EBUSY;
+ 	}
+ 
+ 	irq_map.type = dpaa_portal_qman;
+ 	irq_map.portal_cinh = map.addr.cinh;
+-	process_portal_irq_map(fd, &irq_map);
++	process_portal_irq_map(qmfd, &irq_map);
+ 	return 0;
+ }
+ 
+@@ -136,10 +136,10 @@ static int fsl_qman_portal_finish(void)
+ 	__maybe_unused const struct qm_portal_config *cfg;
+ 	int ret;
+ 
+-	process_portal_irq_unmap(fd);
++	process_portal_irq_unmap(qmfd);
+ 
+-	cfg = qman_destroy_affine_portal();
+-	DPAA_BUG_ON(cfg != &pcfg);
++	cfg = qman_destroy_affine_portal(NULL);
++	DPAA_BUG_ON(cfg != &qpcfg);
+ 	ret = process_portal_unmap(&map.addr);
+ 	if (ret)
+ 		error(0, ret, "process_portal_unmap()");
+@@ -161,14 +161,119 @@ int qman_thread_finish(void)
+ 
+ void qman_thread_irq(void)
+ {
+-	qbman_invoke_irq(pcfg.irq);
++	qbman_invoke_irq(qpcfg.irq);
+ 
+ 	/* Now we need to uninhibit interrupts. This is the only code outside
+ 	 * the regular portal driver that manipulates any portal register, so
+ 	 * rather than breaking that encapsulation I am simply hard-coding the
+ 	 * offset to the inhibit register here.
+ 	 */
+-	out_be32(pcfg.addr_virt[DPAA_PORTAL_CI] + 0xe0c, 0);
++	out_be32(qpcfg.addr_virt[DPAA_PORTAL_CI] + 0xe0c, 0);
++}
++
++struct qman_portal *fsl_qman_portal_create(void)
++{
++	cpu_set_t cpuset;
++	struct qman_portal *res;
++
++	struct qm_portal_config *q_pcfg;
++	int loop, ret;
++	struct dpaa_ioctl_irq_map irq_map;
++	struct dpaa_ioctl_portal_map q_map = {0};
++	int q_fd;
++
++	q_pcfg = kzalloc((sizeof(struct qm_portal_config)), 0);
++	if (!q_pcfg) {
++		error(0, -1, "q_pcfg kzalloc failed");
++		return NULL;
++	}
++
++	/* Verify the thread's cpu-affinity */
++	ret = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
++				     &cpuset);
++	if (ret) {
++		error(0, ret, "pthread_getaffinity_np()");
++		return NULL;
++	}
++
++	q_pcfg->cpu = -1;
++	for (loop = 0; loop < CPU_SETSIZE; loop++)
++		if (CPU_ISSET(loop, &cpuset)) {
++			if (q_pcfg->cpu != -1) {
++				pr_err("Thread is not affine to 1 cpu\n");
++				return NULL;
++			}
++			q_pcfg->cpu = loop;
++		}
++	if (q_pcfg->cpu == -1) {
++		pr_err("Bug in getaffinity handling!\n");
++		return NULL;
++	}
++
++	/* Allocate and map a qman portal */
++	q_map.type = dpaa_portal_qman;
++	q_map.index = QBMAN_ANY_PORTAL_IDX;
++	ret = process_portal_map(&q_map);
++	if (ret) {
++		error(0, ret, "process_portal_map()");
++		return NULL;
++	}
++	q_pcfg->channel = q_map.channel;
++	q_pcfg->pools = q_map.pools;
++	q_pcfg->index = q_map.index;
++
++	/* Make the portal's cache-[enabled|inhibited] regions */
++	q_pcfg->addr_virt[DPAA_PORTAL_CE] = q_map.addr.cena;
++	q_pcfg->addr_virt[DPAA_PORTAL_CI] = q_map.addr.cinh;
++
++	q_fd = open(QMAN_PORTAL_IRQ_PATH, O_RDONLY);
++	if (q_fd == -1) {
++		pr_err("QMan irq init failed\n");
++		goto err1;
++	}
++
++	q_pcfg->irq = q_fd;
++
++	res = qman_create_affine_portal(q_pcfg, NULL, true);
++	if (!res) {
++		pr_err("Qman portal initialisation failed (%d)\n",
++		       q_pcfg->cpu);
++		goto err2;
++	}
++
++	irq_map.type = dpaa_portal_qman;
++	irq_map.portal_cinh = q_map.addr.cinh;
++	process_portal_irq_map(q_fd, &irq_map);
++
++	return res;
++err2:
++	close(q_fd);
++err1:
++	process_portal_unmap(&q_map.addr);
++	return NULL;
++}
++
++int fsl_qman_portal_destroy(struct qman_portal *qp)
++{
++	const struct qm_portal_config *cfg;
++	struct dpaa_portal_map addr;
++	int ret;
++
++	cfg = qman_destroy_affine_portal(qp);
++	kfree(qp);
++
++	process_portal_irq_unmap(cfg->irq);
++
++	addr.cena = cfg->addr_virt[DPAA_PORTAL_CE];
++	addr.cinh = cfg->addr_virt[DPAA_PORTAL_CI];
++
++	ret = process_portal_unmap(&addr);
++	if (ret)
++		pr_err("process_portal_unmap() (%d)\n", ret);
++
++	kfree((void *)cfg);
++
++	return ret;
+ }
+ 
+ int qman_global_init(void)
+diff --git a/drivers/bus/dpaa/base/qbman/qman_priv.h b/drivers/bus/dpaa/base/qbman/qman_priv.h
+index 3e1d7f92bef3..e78d90bd4143 100644
+--- a/drivers/bus/dpaa/base/qbman/qman_priv.h
++++ b/drivers/bus/dpaa/base/qbman/qman_priv.h
+@@ -179,8 +179,10 @@ int qm_get_wpm(int *wpm);
+ 
+ struct qman_portal *qman_create_affine_portal(
+ 			const struct qm_portal_config *config,
+-			const struct qman_cgrs *cgrs);
+-const struct qm_portal_config *qman_destroy_affine_portal(void);
++			const struct qman_cgrs *cgrs,
++			int alloc);
++const struct qm_portal_config *
++qman_destroy_affine_portal(struct qman_portal *q);
+ 
+ struct qm_portal_config *qm_get_unused_portal(void);
+ struct qm_portal_config *qm_get_unused_portal_idx(uint32_t idx);
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index 9d3168f927f3..f6eb837639a9 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -290,8 +290,7 @@ _dpaa_portal_init(void *arg)
+  * rte_dpaa_portal_init - Wrapper over _dpaa_portal_init with thread level check
+  * XXX Complete this
+  */
+-int
+-rte_dpaa_portal_init(void *arg)
++int rte_dpaa_portal_init(void *arg)
+ {
+ 	if (unlikely(!RTE_PER_LCORE(_dpaa_io)))
+ 		return _dpaa_portal_init(arg);
+@@ -299,6 +298,34 @@ rte_dpaa_portal_init(void *arg)
+ 	return 0;
+ }
+ 
++int
++rte_dpaa_portal_fq_init(void *arg, struct qman_fq *fq)
++{
++	/* Affine above created portal with channel*/
++	u32 sdqcr;
++	struct qman_portal *qp;
++
++	if (unlikely(!RTE_PER_LCORE(_dpaa_io)))
++		_dpaa_portal_init(arg);
++
++	/* Initialise qman specific portals */
++	qp = fsl_qman_portal_create();
++	if (!qp) {
++		DPAA_BUS_LOG(ERR, "Unable to alloc fq portal");
++		return -1;
++	}
++	fq->qp = qp;
++	sdqcr = QM_SDQCR_CHANNELS_POOL_CONV(fq->ch_id);
++	qman_static_dequeue_add(sdqcr, qp);
++
++	return 0;
++}
++
++int rte_dpaa_portal_fq_close(struct qman_fq *fq)
++{
++	return fsl_qman_portal_destroy(fq->qp);
++}
++
+ void
+ dpaa_portal_finish(void *arg)
+ {
+diff --git a/drivers/bus/dpaa/include/fsl_qman.h b/drivers/bus/dpaa/include/fsl_qman.h
+index b3ec120517bc..bdf74bed8645 100644
+--- a/drivers/bus/dpaa/include/fsl_qman.h
++++ b/drivers/bus/dpaa/include/fsl_qman.h
+@@ -1223,21 +1223,24 @@ struct qman_fq_cb {
+ struct qman_fq {
+ 	/* Caller of qman_create_fq() provides these demux callbacks */
+ 	struct qman_fq_cb cb;
+-	/*
+-	 * These are internal to the driver, don't touch. In particular, they
+-	 * may change, be removed, or extended (so you shouldn't rely on
+-	 * sizeof(qman_fq) being a constant).
+-	 */
+-	spinlock_t fqlock;
+-	u32 fqid;
++
+ 	u32 fqid_le;
++	u16 ch_id;
++	u8 cgr_groupid;
++	u8 is_static;
+ 
+ 	/* DPDK Interface */
+ 	void *dpaa_intf;
+ 
++	/* affined portal in case of static queue */
++	struct qman_portal *qp;
++
+ 	volatile unsigned long flags;
++
+ 	enum qman_fq_state state;
+-	int cgr_groupid;
++	u32 fqid;
++	spinlock_t fqlock;
++
+ 	struct rb_node node;
+ #ifdef CONFIG_FSL_QMAN_FQ_LOOKUP
+ 	u32 key;
+@@ -1416,7 +1419,7 @@ void qman_start_dequeues(void);
+  * (SDQCR). The requested pools are limited to those the portal has dequeue
+  * access to.
+  */
+-void qman_static_dequeue_add(u32 pools);
++void qman_static_dequeue_add(u32 pools, struct qman_portal *qm);
+ 
+ /**
+  * qman_static_dequeue_del - Remove pool channels from the portal SDQCR
+@@ -1426,7 +1429,7 @@ void qman_static_dequeue_add(u32 pools);
+  * register (SDQCR). The requested pools are limited to those the portal has
+  * dequeue access to.
+  */
+-void qman_static_dequeue_del(u32 pools);
++void qman_static_dequeue_del(u32 pools, struct qman_portal *qp);
+ 
+ /**
+  * qman_static_dequeue_get - return the portal's current SDQCR
+@@ -1435,7 +1438,7 @@ void qman_static_dequeue_del(u32 pools);
+  * entire register is returned, so if only the currently-enabled pool channels
+  * are desired, mask the return value with QM_SDQCR_CHANNELS_POOL_MASK.
+  */
+-u32 qman_static_dequeue_get(void);
++u32 qman_static_dequeue_get(struct qman_portal *qp);
+ 
+ /**
+  * qman_dca - Perform a Discrete Consumption Acknowledgment
+diff --git a/drivers/bus/dpaa/include/fsl_usd.h b/drivers/bus/dpaa/include/fsl_usd.h
+index a3243aff7905..038a89dcce4f 100644
+--- a/drivers/bus/dpaa/include/fsl_usd.h
++++ b/drivers/bus/dpaa/include/fsl_usd.h
+@@ -100,6 +100,10 @@ void bman_thread_irq(void);
+ int qman_global_init(void);
+ int bman_global_init(void);
+ 
++/* Direct portal create and destroy */
++struct qman_portal *fsl_qman_portal_create(void);
++int fsl_qman_portal_destroy(struct qman_portal *qp);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/drivers/bus/dpaa/include/process.h b/drivers/bus/dpaa/include/process.h
+index 989ddcd51c76..352e949f0406 100644
+--- a/drivers/bus/dpaa/include/process.h
++++ b/drivers/bus/dpaa/include/process.h
+@@ -72,6 +72,11 @@ enum dpaa_portal_type {
+ 	dpaa_portal_bman,
+ };
+ 
++struct dpaa_portal_map {
++	void *cinh;
++	void *cena;
++};
++
+ struct dpaa_ioctl_portal_map {
+ 	/* Input parameter, is a qman or bman portal required. */
+ 	enum dpaa_portal_type type;
+@@ -83,10 +88,8 @@ struct dpaa_ioctl_portal_map {
+ 	/* Return value if the map succeeds, this gives the mapped
+ 	 * cache-inhibited (cinh) and cache-enabled (cena) addresses.
+ 	 */
+-	struct dpaa_portal_map {
+-		void *cinh;
+-		void *cena;
+-	} addr;
++	struct dpaa_portal_map addr;
++
+ 	/* Qman-specific return values */
+ 	u16 channel;
+ 	uint32_t pools;
+diff --git a/drivers/bus/dpaa/rte_bus_dpaa_version.map b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+index f41236299640..4e3afdad019f 100644
+--- a/drivers/bus/dpaa/rte_bus_dpaa_version.map
++++ b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+@@ -74,6 +74,8 @@ DPDK_18.02 {
+ 	qman_delete_cgr;
+ 	qman_modify_cgr;
+ 	qman_release_cgrid_range;
++	rte_dpaa_portal_fq_close;
++	rte_dpaa_portal_fq_init;
+ 
+ 	local: *;
+ } DPDK_17.11;
+diff --git a/drivers/bus/dpaa/rte_dpaa_bus.h b/drivers/bus/dpaa/rte_dpaa_bus.h
+index 76c10cb79ef6..6ac1d36c86f6 100644
+--- a/drivers/bus/dpaa/rte_dpaa_bus.h
++++ b/drivers/bus/dpaa/rte_dpaa_bus.h
+@@ -162,6 +162,10 @@ void rte_dpaa_driver_unregister(struct rte_dpaa_driver *driver);
+  */
+ int rte_dpaa_portal_init(void *arg);
+ 
++int rte_dpaa_portal_fq_init(void *arg, struct qman_fq *fq);
++
++int rte_dpaa_portal_fq_close(struct qman_fq *fq);
++
+ /**
+  * Cleanup a DPAA Portal
+  */
+-- 
+2.14.3
+

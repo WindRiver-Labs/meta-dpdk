@@ -1,0 +1,480 @@
+From 32e1f7d9696ce942f0e8b4626c33a3cde849966b Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Wed, 17 Jan 2018 15:26:24 +0530
+Subject: [PATCH 041/166] event/dpaa: add eventdev PMD
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ MAINTAINERS                                       |   5 +
+ drivers/event/Makefile                            |   1 +
+ drivers/event/dpaa/Makefile                       |  37 +++
+ drivers/event/dpaa/dpaa_eventdev.c                | 270 ++++++++++++++++++++++
+ drivers/event/dpaa/dpaa_eventdev.h                |  81 +++++++
+ drivers/event/dpaa/rte_pmd_dpaa_event_version.map |   4 +
+ mk/rte.app.mk                                     |   1 +
+ 7 files changed, 399 insertions(+)
+ create mode 100644 drivers/event/dpaa/Makefile
+ create mode 100644 drivers/event/dpaa/dpaa_eventdev.c
+ create mode 100644 drivers/event/dpaa/dpaa_eventdev.h
+ create mode 100644 drivers/event/dpaa/rte_pmd_dpaa_event_version.map
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index f0baeb4230c2..bf4d0daf04f1 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -692,6 +692,11 @@ M: Nipun Gupta <nipun.gupta@nxp.com>
+ F: drivers/event/dpaa2/
+ F: doc/guides/eventdevs/dpaa2.rst
+ 
++NXP DPAA eventdev
++M: Hemant Agrawal <hemant.agrawal@nxp.com>
++M: Sunil Kumar Kori <sunil.kori@nxp.com>
++F: drivers/event/dpaa/
++
+ Software Eventdev PMD
+ M: Harry van Haaren <harry.van.haaren@intel.com>
+ F: drivers/event/sw/
+diff --git a/drivers/event/Makefile b/drivers/event/Makefile
+index 1f9c0ba21842..c726234a40bb 100644
+--- a/drivers/event/Makefile
++++ b/drivers/event/Makefile
+@@ -35,5 +35,6 @@ DIRS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_EVENTDEV) += skeleton
+ DIRS-$(CONFIG_RTE_LIBRTE_PMD_SW_EVENTDEV) += sw
+ DIRS-$(CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF) += octeontx
+ DIRS-$(CONFIG_RTE_LIBRTE_PMD_DPAA2_EVENTDEV) += dpaa2
++DIRS-$(CONFIG_RTE_LIBRTE_PMD_DPAA_EVENTDEV) += dpaa
+ 
+ include $(RTE_SDK)/mk/rte.subdir.mk
+diff --git a/drivers/event/dpaa/Makefile b/drivers/event/dpaa/Makefile
+new file mode 100644
+index 000000000000..bd0b6c9a243a
+--- /dev/null
++++ b/drivers/event/dpaa/Makefile
+@@ -0,0 +1,37 @@
++#   SPDX-License-Identifier:        BSD-3-Clause
++#   Copyright 2017 NXP
++#
++
++include $(RTE_SDK)/mk/rte.vars.mk
++RTE_SDK_DPAA=$(RTE_SDK)/drivers/net/dpaa
++
++#
++# library name
++#
++LIB = librte_pmd_dpaa_event.a
++
++CFLAGS := -I$(SRCDIR) $(CFLAGS)
++CFLAGS += -O3 $(WERROR_FLAGS)
++CFLAGS += -Wno-pointer-arith
++CFLAGS += -I$(RTE_SDK_DPAA)/
++CFLAGS += -I$(RTE_SDK_DPAA)/include
++CFLAGS += -I$(RTE_SDK)/drivers/bus/dpaa
++CFLAGS += -I$(RTE_SDK)/drivers/bus/dpaa/include/
++CFLAGS += -I$(RTE_SDK)/drivers/mempool/dpaa
++CFLAGS += -I$(RTE_SDK)/lib/librte_eal/common/include
++CFLAGS += -I$(RTE_SDK)/lib/librte_eal/linuxapp/eal/include
++
++EXPORT_MAP := rte_pmd_dpaa_event_version.map
++
++LIBABIVER := 1
++
++# Interfaces with DPDK
++SRCS-$(CONFIG_RTE_LIBRTE_PMD_DPAA_EVENTDEV) += dpaa_eventdev.c
++
++LDLIBS += -lrte_bus_dpaa
++LDLIBS += -lrte_mempool_dpaa
++LDLIBS += -lrte_eal -lrte_mbuf -lrte_mempool -lrte_ring
++LDLIBS += -lrte_ethdev -lrte_net -lrte_kvargs
++LDLIBS += -lrte_eventdev -lrte_pmd_dpaa -lrte_bus_vdev
++
++include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/drivers/event/dpaa/dpaa_eventdev.c b/drivers/event/dpaa/dpaa_eventdev.c
+new file mode 100644
+index 000000000000..ba9b81418c72
+--- /dev/null
++++ b/drivers/event/dpaa/dpaa_eventdev.c
+@@ -0,0 +1,270 @@
++/*   SPDX-License-Identifier:        BSD-3-Clause
++ *   Copyright 2017 NXP
++ */
++
++#include <assert.h>
++#include <stdio.h>
++#include <stdbool.h>
++#include <errno.h>
++#include <stdint.h>
++#include <string.h>
++#include <sys/epoll.h>
++
++#include <rte_atomic.h>
++#include <rte_byteorder.h>
++#include <rte_common.h>
++#include <rte_debug.h>
++#include <rte_dev.h>
++#include <rte_eal.h>
++#include <rte_lcore.h>
++#include <rte_log.h>
++#include <rte_malloc.h>
++#include <rte_memcpy.h>
++#include <rte_memory.h>
++#include <rte_memzone.h>
++#include <rte_pci.h>
++#include <rte_eventdev.h>
++#include <rte_eventdev_pmd_vdev.h>
++#include <rte_ethdev.h>
++#include <rte_event_eth_rx_adapter.h>
++#include <rte_dpaa_bus.h>
++#include <rte_dpaa_logs.h>
++#include <rte_cycles_64.h>
++
++#include <dpaa_ethdev.h>
++#include "dpaa_eventdev.h"
++#include <dpaa_mempool.h>
++
++/*
++ * Clarifications
++ * Evendev = Virtual Instance for SoC
++ * Eventport = Portal Instance
++ * Eventqueue = Channel Instance
++ * 1 Eventdev can have N Eventqueue
++ */
++
++static int
++dpaa_event_dequeue_timeout_ticks(struct rte_eventdev *dev, uint64_t ns,
++				 uint64_t *timeout_ticks)
++{
++	uint64_t cycles_per_second;
++
++	EVENTDEV_DRV_FUNC_TRACE();
++
++	RTE_SET_USED(dev);
++
++	cycles_per_second = rte_get_timer_hz();
++	*timeout_ticks = ns * (cycles_per_second / NS_PER_S);
++
++	return 0;
++}
++
++static void
++dpaa_event_dev_info_get(struct rte_eventdev *dev,
++			struct rte_event_dev_info *dev_info)
++{
++	EVENTDEV_DRV_FUNC_TRACE();
++
++	RTE_SET_USED(dev);
++	dev_info->driver_name = "event_dpaa";
++	dev_info->min_dequeue_timeout_ns =
++		DPAA_EVENT_MIN_DEQUEUE_TIMEOUT;
++	dev_info->max_dequeue_timeout_ns =
++		DPAA_EVENT_MAX_DEQUEUE_TIMEOUT;
++	dev_info->dequeue_timeout_ns =
++		DPAA_EVENT_MIN_DEQUEUE_TIMEOUT;
++	dev_info->max_event_queues =
++		DPAA_EVENT_MAX_QUEUES;
++	dev_info->max_event_queue_flows =
++		DPAA_EVENT_MAX_QUEUE_FLOWS;
++	dev_info->max_event_queue_priority_levels =
++		DPAA_EVENT_MAX_QUEUE_PRIORITY_LEVELS;
++	dev_info->max_event_priority_levels =
++		DPAA_EVENT_MAX_EVENT_PRIORITY_LEVELS;
++	dev_info->max_event_ports =
++		DPAA_EVENT_MAX_EVENT_PORT;
++	dev_info->max_event_port_dequeue_depth =
++		DPAA_EVENT_MAX_PORT_DEQUEUE_DEPTH;
++	dev_info->max_event_port_enqueue_depth =
++		DPAA_EVENT_MAX_PORT_ENQUEUE_DEPTH;
++	/*
++	 * TODO: Need to find out that how to fetch this info
++	 * from kernel or somewhere else.
++	 */
++	dev_info->max_num_events =
++		DPAA_EVENT_MAX_NUM_EVENTS;
++	dev_info->event_dev_cap =
++		RTE_EVENT_DEV_CAP_DISTRIBUTED_SCHED |
++		RTE_EVENT_DEV_CAP_BURST_MODE |
++		RTE_EVENT_DEV_CAP_MULTIPLE_QUEUE_PORT |
++		RTE_EVENT_DEV_CAP_NONSEQ_MODE;
++}
++
++static int
++dpaa_event_dev_configure(const struct rte_eventdev *dev)
++{
++	struct dpaa_eventdev *priv = dev->data->dev_private;
++	struct rte_event_dev_config *conf = &dev->data->dev_conf;
++	int ret, i;
++	uint32_t *ch_id;
++
++	EVENTDEV_DRV_FUNC_TRACE();
++
++	priv->dequeue_timeout_ns = conf->dequeue_timeout_ns;
++	priv->nb_events_limit = conf->nb_events_limit;
++	priv->nb_event_queues = conf->nb_event_queues;
++	priv->nb_event_ports = conf->nb_event_ports;
++	priv->nb_event_queue_flows = conf->nb_event_queue_flows;
++	priv->nb_event_port_dequeue_depth = conf->nb_event_port_dequeue_depth;
++	priv->nb_event_port_enqueue_depth = conf->nb_event_port_enqueue_depth;
++	priv->event_dev_cfg = conf->event_dev_cfg;
++
++	/* Check dequeue timeout method is per dequeue or global */
++	if (priv->event_dev_cfg & RTE_EVENT_DEV_CFG_PER_DEQUEUE_TIMEOUT) {
++		/*
++		 * Use timeout value as given in dequeue operation.
++		 * So invalidating this timetout value.
++		 */
++		priv->dequeue_timeout_ns = 0;
++	}
++
++	ch_id = rte_malloc("dpaa-channels",
++			  sizeof(uint32_t) * priv->nb_event_queues,
++			  RTE_CACHE_LINE_SIZE);
++	if (ch_id == NULL) {
++		EVENTDEV_DRV_ERR("Fail to allocate memory for dpaa channels\n");
++		return -ENOMEM;
++	}
++	/* Create requested event queues within the given event device */
++	ret = qman_alloc_pool_range(ch_id, priv->nb_event_queues, 1, 0);
++	if (ret < 0) {
++		EVENTDEV_DRV_ERR("Failed to create internal channel\n");
++		rte_free(ch_id);
++		return ret;
++	}
++	for (i = 0; i < priv->nb_event_queues; i++)
++		priv->evq_info[i].ch_id = (u16)ch_id[i];
++
++	/* Lets prepare event ports */
++	memset(&priv->ports[0], 0,
++	      sizeof(struct dpaa_port) * priv->nb_event_ports);
++	if (priv->event_dev_cfg & RTE_EVENT_DEV_CFG_PER_DEQUEUE_TIMEOUT) {
++		for (i = 0; i < priv->nb_event_ports; i++) {
++			priv->ports[i].timeout =
++				DPAA_EVENT_PORT_DEQUEUE_TIMEOUT_INVALID;
++		}
++	} else if (priv->dequeue_timeout_ns == 0) {
++		for (i = 0; i < priv->nb_event_ports; i++) {
++			dpaa_event_dequeue_timeout_ticks(NULL,
++				DPAA_EVENT_PORT_DEQUEUE_TIMEOUT_NS,
++				&priv->ports[i].timeout);
++		}
++	} else {
++		for (i = 0; i < priv->nb_event_ports; i++) {
++			dpaa_event_dequeue_timeout_ticks(NULL,
++				priv->dequeue_timeout_ns,
++				&priv->ports[i].timeout);
++		}
++	}
++	/*
++	 * TODO: Currently portals are affined with threads. Maximum threads
++	 * can be created equals to number of lcore.
++	 */
++	rte_free(ch_id);
++	EVENTDEV_DRV_LOG("Configured eventdev devid=%d", dev->data->dev_id);
++
++	return 0;
++}
++
++static int
++dpaa_event_dev_start(struct rte_eventdev *dev)
++{
++	EVENTDEV_DRV_FUNC_TRACE();
++	RTE_SET_USED(dev);
++
++	return 0;
++}
++
++static void
++dpaa_event_dev_stop(struct rte_eventdev *dev)
++{
++	EVENTDEV_DRV_FUNC_TRACE();
++	RTE_SET_USED(dev);
++}
++
++static int
++dpaa_event_dev_close(struct rte_eventdev *dev)
++{
++	EVENTDEV_DRV_FUNC_TRACE();
++	RTE_SET_USED(dev);
++
++	return 0;
++}
++
++
++
++static const struct rte_eventdev_ops dpaa_eventdev_ops = {
++	.dev_infos_get    = dpaa_event_dev_info_get,
++	.dev_configure    = dpaa_event_dev_configure,
++	.dev_start        = dpaa_event_dev_start,
++	.dev_stop         = dpaa_event_dev_stop,
++	.dev_close        = dpaa_event_dev_close,
++	.timeout_ticks    = dpaa_event_dequeue_timeout_ticks,
++};
++
++static int
++dpaa_event_dev_create(const char *name)
++{
++	struct rte_eventdev *eventdev;
++	struct dpaa_eventdev *priv;
++
++	eventdev = rte_event_pmd_vdev_init(name,
++					   sizeof(struct dpaa_eventdev),
++					   rte_socket_id());
++	if (eventdev == NULL) {
++		EVENTDEV_DRV_ERR("Failed to create eventdev vdev %s", name);
++		goto fail;
++	}
++
++	eventdev->dev_ops       = &dpaa_eventdev_ops;
++
++	/* For secondary processes, the primary has done all the work */
++	if (rte_eal_process_type() != RTE_PROC_PRIMARY)
++		return 0;
++
++	priv = eventdev->data->dev_private;
++	priv->max_event_queues = DPAA_EVENT_MAX_QUEUES;
++
++	return 0;
++fail:
++	return -EFAULT;
++}
++
++static int
++dpaa_event_dev_probe(struct rte_vdev_device *vdev)
++{
++	const char *name;
++
++	name = rte_vdev_device_name(vdev);
++	EVENTDEV_DRV_LOG("Initializing %s", name);
++
++	return dpaa_event_dev_create(name);
++}
++
++static int
++dpaa_event_dev_remove(struct rte_vdev_device *vdev)
++{
++	const char *name;
++
++	name = rte_vdev_device_name(vdev);
++	EVENTDEV_DRV_LOG("Closing %s", name);
++
++	return rte_event_pmd_vdev_uninit(name);
++}
++
++static struct rte_vdev_driver vdev_eventdev_dpaa_pmd = {
++	.probe = dpaa_event_dev_probe,
++	.remove = dpaa_event_dev_remove
++};
++
++RTE_PMD_REGISTER_VDEV(EVENTDEV_NAME_DPAA_PMD, vdev_eventdev_dpaa_pmd);
+diff --git a/drivers/event/dpaa/dpaa_eventdev.h b/drivers/event/dpaa/dpaa_eventdev.h
+new file mode 100644
+index 000000000000..153f38d9e9ec
+--- /dev/null
++++ b/drivers/event/dpaa/dpaa_eventdev.h
+@@ -0,0 +1,81 @@
++/*   SPDX-License-Identifier:        BSD-3-Clause
++ *   Copyright 2017 NXP
++ */
++
++#ifndef __DPAA_EVENTDEV_H__
++#define __DPAA_EVENTDEV_H__
++
++#include <rte_eventdev_pmd.h>
++#include <rte_eventdev_pmd_vdev.h>
++#include <rte_atomic.h>
++#include <rte_per_lcore.h>
++
++#define EVENTDEV_NAME_DPAA_PMD		event_dpaa
++
++#define EVENTDEV_DRV_LOG(fmt, args...)	\
++		DPAA_EVENTDEV_INFO(fmt, ## args)
++#define EVENTDEV_DRV_FUNC_TRACE()	\
++		DPAA_EVENTDEV_DEBUG("%s() Called:\n", __func__)
++#define EVENTDEV_DRV_ERR(fmt, args...)	\
++		DPAA_EVENTDEV_ERR("%s(): " fmt "\n", __func__, ## args)
++
++#define DPAA_EVENT_MAX_PORTS			8
++#define DPAA_EVENT_MAX_QUEUES			16
++#define DPAA_EVENT_MIN_DEQUEUE_TIMEOUT	1
++#define DPAA_EVENT_MAX_DEQUEUE_TIMEOUT	(UINT32_MAX - 1)
++#define DPAA_EVENT_MAX_QUEUE_FLOWS		2048
++#define DPAA_EVENT_MAX_QUEUE_PRIORITY_LEVELS	8
++#define DPAA_EVENT_MAX_EVENT_PRIORITY_LEVELS	0
++#define DPAA_EVENT_MAX_EVENT_PORT		RTE_MAX_LCORE
++#define DPAA_EVENT_MAX_PORT_DEQUEUE_DEPTH	8
++#define DPAA_EVENT_PORT_DEQUEUE_TIMEOUT_NS	100UL
++#define DPAA_EVENT_PORT_DEQUEUE_TIMEOUT_INVALID	((uint64_t)-1)
++#define DPAA_EVENT_MAX_PORT_ENQUEUE_DEPTH	1
++#define DPAA_EVENT_MAX_NUM_EVENTS		(INT32_MAX - 1)
++
++#define DPAA_EVENT_DEV_CAP			\
++do {						\
++	RTE_EVENT_DEV_CAP_DISTRIBUTED_SCHED |	\
++	RTE_EVENT_DEV_CAP_BURST_MODE;		\
++} while (0)
++
++#define DPAA_EVENT_QUEUE_ATOMIC_FLOWS	0
++#define DPAA_EVENT_QUEUE_ORDER_SEQUENCES	2048
++
++#define RTE_EVENT_ETH_RX_ADAPTER_DPAA_CAP \
++		(RTE_EVENT_ETH_RX_ADAPTER_CAP_INTERNAL_PORT | \
++		RTE_EVENT_ETH_RX_ADAPTER_CAP_MULTI_EVENTQ | \
++		RTE_EVENT_ETH_RX_ADAPTER_CAP_OVERRIDE_FLOW_ID)
++
++struct dpaa_eventq {
++	/* Channel Id */
++	uint16_t ch_id;
++	/* Configuration provided by the user */
++	uint32_t event_queue_cfg;
++	uint32_t event_queue_id;
++	/* Event port */
++	void *event_port;
++};
++
++struct dpaa_port {
++	struct dpaa_eventq evq_info[DPAA_EVENT_MAX_QUEUES];
++	uint8_t num_linked_evq;
++	uint8_t is_port_linked;
++	uint64_t timeout;
++};
++
++struct dpaa_eventdev {
++	struct dpaa_eventq evq_info[DPAA_EVENT_MAX_QUEUES];
++	struct dpaa_port ports[DPAA_EVENT_MAX_PORTS];
++	uint32_t dequeue_timeout_ns;
++	uint32_t nb_events_limit;
++	uint8_t max_event_queues;
++	uint8_t nb_event_queues;
++	uint8_t nb_event_ports;
++	uint8_t resvd;
++	uint32_t nb_event_queue_flows;
++	uint32_t nb_event_port_dequeue_depth;
++	uint32_t nb_event_port_enqueue_depth;
++	uint32_t event_dev_cfg;
++};
++#endif /* __DPAA_EVENTDEV_H__ */
+diff --git a/drivers/event/dpaa/rte_pmd_dpaa_event_version.map b/drivers/event/dpaa/rte_pmd_dpaa_event_version.map
+new file mode 100644
+index 000000000000..179140fb875b
+--- /dev/null
++++ b/drivers/event/dpaa/rte_pmd_dpaa_event_version.map
+@@ -0,0 +1,4 @@
++DPDK_18.02 {
++
++	local: *;
++};
+diff --git a/mk/rte.app.mk b/mk/rte.app.mk
+index e360ae48a4df..0df399c8e5a4 100644
+--- a/mk/rte.app.mk
++++ b/mk/rte.app.mk
+@@ -198,6 +198,7 @@ _LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_SKELETON_EVENTDEV) += -lrte_pmd_skeleton_event
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_SW_EVENTDEV) += -lrte_pmd_sw_event
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF) += -lrte_pmd_octeontx_ssovf
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_DPAA2_EVENTDEV) += -lrte_pmd_dpaa2_event
++_LDLIBS-$(CONFIG_RTE_LIBRTE_PMD_DPAA_EVENTDEV) += -lrte_pmd_dpaa_event
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_OCTEONTX_MEMPOOL) += -lrte_mempool_octeontx
+ _LDLIBS-$(CONFIG_RTE_LIBRTE_OCTEONTX_PMD) += -lrte_pmd_octeontx
+ endif # CONFIG_RTE_LIBRTE_EVENTDEV
+-- 
+2.14.3
+

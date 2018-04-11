@@ -1,0 +1,37 @@
+From d6ae78383c7c1f3a1c0f07b6e025c0128a14adba Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 14 Feb 2018 16:04:46 +0530
+Subject: [PATCH 132/166] PVT: bus/fslmc: add preprocessors to get flc and frc
+ from fd
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index ac80be81e3c7..80f5e2da9d6e 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -215,7 +215,7 @@ enum qbman_fd_format {
+ 	((fd)->simple.frc = (0x80000000 | (len)))
+ #define DPAA2_GET_FD_FRC_PARSE_SUM(fd)	\
+ 			((uint16_t)(((fd)->simple.frc & 0xffff0000) >> 16))
+-#define DPAA2_SET_FD_FRC(fd, frc)	((fd)->simple.frc = frc)
++#define DPAA2_SET_FD_FRC(fd, _frc)	((fd)->simple.frc = _frc)
+ #define DPAA2_RESET_FD_CTRL(fd)	 ((fd)->simple.ctrl = 0)
+ 
+ #define	DPAA2_SET_FD_ASAL(fd, asal)	((fd)->simple.ctrl |= (asal << 16))
+@@ -252,6 +252,9 @@ enum qbman_fd_format {
+ #define DPAA2_GET_FD_BPID(fd)	(((fd)->simple.bpid_offset & 0x00003FFF))
+ #define DPAA2_GET_FD_IVP(fd)   (((fd)->simple.bpid_offset & 0x00004000) >> 14)
+ #define DPAA2_GET_FD_OFFSET(fd)	(((fd)->simple.bpid_offset & 0x0FFF0000) >> 16)
++#define DPAA2_GET_FD_FRC(fd)	((fd)->simple.frc)
++#define DPAA2_GET_FD_FLC(fd) \
++	(((uint64_t)((fd)->simple.flc_hi) << 32) + (fd)->simple.flc_lo)
+ #define DPAA2_GET_FLE_OFFSET(fle) (((fle)->fin_bpid_offset & 0x0FFF0000) >> 16)
+ #define DPAA2_SET_FLE_SG_EXT(fle) ((fle)->fin_bpid_offset |= (uint64_t)1 << 29)
+ #define DPAA2_IS_SET_FLE_SG_EXT(fle)	\
+-- 
+2.14.3
+

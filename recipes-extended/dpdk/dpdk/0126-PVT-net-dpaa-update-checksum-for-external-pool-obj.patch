@@ -1,0 +1,27 @@
+From 96be4574c733ae5d9ad95474da7cd2aea08e3965 Mon Sep 17 00:00:00 2001
+From: Akhil Goyal <akhil.goyal@nxp.com>
+Date: Thu, 8 Feb 2018 11:59:05 +0530
+Subject: [PATCH 126/166] PVT: net/dpaa: update checksum for external pool obj
+
+Signed-off-by: Akhil Goyal <akhil.goyal@nxp.com>
+DPDK-1189
+---
+ drivers/net/dpaa/dpaa_rxtx.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 81a1c3220f3e..1e7ea62c9ee6 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -852,6 +852,8 @@ tx_on_external_pool(struct qman_fq *txq, struct rte_mbuf *mbuf,
+ 	}
+ 
+ 	DPAA_MBUF_TO_CONTIG_FD(dmable_mbuf, fd_arr, dpaa_intf->bp_info->bpid);
++	if (mbuf->ol_flags & DPAA_TX_CKSUM_OFFLOAD_MASK)
++		dpaa_unsegmented_checksum(mbuf, fd_arr);
+ 
+ 	return 0;
+ }
+-- 
+2.14.3
+

@@ -1,0 +1,39 @@
+From 233220cc35cf9b7f04458524d6c6baf7d1420c25 Mon Sep 17 00:00:00 2001
+From: Ashish Jain <ashish.jain@nxp.com>
+Date: Tue, 6 Mar 2018 12:41:22 +0530
+Subject: [PATCH 162/166] PVT: crypto/dpaa_sec: Adding a check to verify portal
+ configuration
+
+Adding a check to do portal configuration if not already
+configured before packet enqueue. This check is only done
+during dpaa_sec_attach_sess_q for initial packets,
+so this change wont affect the data path and hence performance.
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+DPDK-1215
+---
+ drivers/crypto/dpaa_sec/dpaa_sec.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.c b/drivers/crypto/dpaa_sec/dpaa_sec.c
+index 309b764860b6..f92242d849eb 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.c
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.c
+@@ -1785,7 +1785,13 @@ dpaa_sec_attach_sess_q(struct dpaa_sec_qp *qp, dpaa_sec_session *sess)
+ 		PMD_DRV_LOG(ERR, "Unable to prepare sec cdb");
+ 		return -1;
+ 	}
+-
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			PMD_DRV_LOG(ERR, "Failure in affining portal");
++			return ret;
++		}
++	}
+ 	ret = dpaa_sec_init_rx(sess->inq, dpaa_mem_vtop(&sess->cdb),
+ 			       qman_fq_fqid(&qp->outq));
+ 	if (ret)
+-- 
+2.14.3
+

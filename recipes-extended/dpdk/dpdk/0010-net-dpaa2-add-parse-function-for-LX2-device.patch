@@ -1,0 +1,197 @@
+From 900941120a300f2bad95fac929d707c07138514a Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:24 +0530
+Subject: [PATCH 010/166] net/dpaa2: add parse function for LX2 device
+
+Adding support for DPDK packet parsing logic for LX2
+platform to accommodate the new FRC format introduced in LX2.
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h |  2 +
+ drivers/net/dpaa2/dpaa2_ethdev.h        | 27 ++++++++++
+ drivers/net/dpaa2/dpaa2_rxtx.c          | 94 ++++++++++++++++++++++++++++++---
+ 3 files changed, 116 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index 9f9ce0bd8587..c29d7f3a6c80 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -209,6 +209,8 @@ enum qbman_fd_format {
+ 	(((fd)->simple.bpid_offset |= (uint32_t)(offset) << 16))
+ #define DPAA2_SET_FD_INTERNAL_JD(fd, len) \
+ 	((fd)->simple.frc = (0x80000000 | (len)))
++#define DPAA2_GET_FD_FRC_PARSE_SUM(fd)	\
++			((uint16_t)(((fd)->simple.frc & 0xffff0000) >> 16))
+ #define DPAA2_SET_FD_FRC(fd, frc)	((fd)->simple.frc = frc)
+ #define DPAA2_RESET_FD_CTRL(fd)	 ((fd)->simple.ctrl = 0)
+ 
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.h b/drivers/net/dpaa2/dpaa2_ethdev.h
+index b8e94aa3ddf0..9a9496f314c9 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.h
++++ b/drivers/net/dpaa2/dpaa2_ethdev.h
+@@ -76,6 +76,33 @@
+ /* Disable RX tail drop, default is enable */
+ #define DPAA2_RX_TAILDROP_OFF	0x04
+ 
++/* LX2 FRC Parsed values (Little Endian) */
++#define DPAA2_PKT_TYPE_ETHER		0x0060
++#define DPAA2_PKT_TYPE_IPV4		0x0000
++#define DPAA2_PKT_TYPE_IPV6		0x0020
++#define DPAA2_PKT_TYPE_IPV4_EXT \
++			(0x0001 | DPAA2_PKT_TYPE_IPV4)
++#define DPAA2_PKT_TYPE_IPV6_EXT \
++			(0x0001 | DPAA2_PKT_TYPE_IPV6)
++#define DPAA2_PKT_TYPE_IPV4_TCP \
++			(0x000e | DPAA2_PKT_TYPE_IPV4)
++#define DPAA2_PKT_TYPE_IPV6_TCP \
++			(0x000e | DPAA2_PKT_TYPE_IPV6)
++#define DPAA2_PKT_TYPE_IPV4_UDP \
++			(0x0010 | DPAA2_PKT_TYPE_IPV4)
++#define DPAA2_PKT_TYPE_IPV6_UDP \
++			(0x0010 | DPAA2_PKT_TYPE_IPV6)
++#define DPAA2_PKT_TYPE_IPV4_SCTP	\
++			(0x000f | DPAA2_PKT_TYPE_IPV4)
++#define DPAA2_PKT_TYPE_IPV6_SCTP	\
++			(0x000f | DPAA2_PKT_TYPE_IPV6)
++#define DPAA2_PKT_TYPE_IPV4_ICMP \
++			(0x0003 | DPAA2_PKT_TYPE_IPV4_EXT)
++#define DPAA2_PKT_TYPE_IPV6_ICMP \
++			(0x0003 | DPAA2_PKT_TYPE_IPV6_EXT)
++#define DPAA2_PKT_TYPE_VLAN_1		0x0160
++#define DPAA2_PKT_TYPE_VLAN_2		0x0260
++
+ struct dpaa2_dev_priv {
+ 	void *hw;
+ 	int32_t hw_id;
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 93c23190a3db..3b58a48be1b5 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -50,6 +50,75 @@
+ #include "dpaa2_ethdev.h"
+ #include "base/dpaa2_hw_dpni_annot.h"
+ 
++static inline void __attribute__((hot))
++dpaa2_dev_rx_parse_frc(struct rte_mbuf *m, uint16_t frc)
++{
++	PMD_RX_LOG(DEBUG, "frc = 0x%x   ", frc);
++
++	m->packet_type = RTE_PTYPE_UNKNOWN;
++	switch (frc) {
++	case DPAA2_PKT_TYPE_ETHER:
++		m->packet_type = RTE_PTYPE_L2_ETHER;
++		break;
++	case DPAA2_PKT_TYPE_IPV4:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4;
++		break;
++	case DPAA2_PKT_TYPE_IPV6:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6;
++		break;
++	case DPAA2_PKT_TYPE_IPV4_EXT:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4_EXT;
++		break;
++	case DPAA2_PKT_TYPE_IPV6_EXT:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6_EXT;
++		break;
++	case DPAA2_PKT_TYPE_IPV4_TCP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_TCP;
++		break;
++	case DPAA2_PKT_TYPE_IPV6_TCP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_TCP;
++		break;
++	case DPAA2_PKT_TYPE_IPV4_UDP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_UDP;
++		break;
++	case DPAA2_PKT_TYPE_IPV6_UDP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_UDP;
++		break;
++	case DPAA2_PKT_TYPE_IPV4_SCTP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_SCTP;
++		break;
++	case DPAA2_PKT_TYPE_IPV6_SCTP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_SCTP;
++		break;
++	case DPAA2_PKT_TYPE_IPV4_ICMP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV4 | RTE_PTYPE_L4_ICMP;
++		break;
++	case DPAA2_PKT_TYPE_IPV6_ICMP:
++		m->packet_type = RTE_PTYPE_L2_ETHER |
++			RTE_PTYPE_L3_IPV6 | RTE_PTYPE_L4_ICMP;
++		break;
++	case DPAA2_PKT_TYPE_VLAN_1:
++	case DPAA2_PKT_TYPE_VLAN_2:
++		m->ol_flags |= PKT_RX_VLAN;
++		break;
++	/* More switch cases can be added */
++	/* TODO: Add handling for checksum error check from FRC */
++	default:
++		m->packet_type = RTE_PTYPE_UNKNOWN;
++	}
++}
++
+ static inline uint32_t __attribute__((hot))
+ dpaa2_dev_rx_parse(uint64_t hw_annot_addr)
+ {
+@@ -159,13 +228,17 @@ eth_sg_fd_to_mbuf(const struct qbman_fd *fd)
+ 	first_seg->pkt_len = DPAA2_GET_FD_LEN(fd);
+ 	first_seg->nb_segs = 1;
+ 	first_seg->next = NULL;
+-
+-	first_seg->packet_type = dpaa2_dev_rx_parse(
++	if (dpaa2_svr_family == SVR_LX2160A)
++		dpaa2_dev_rx_parse_frc(first_seg,
++				DPAA2_GET_FD_FRC_PARSE_SUM(fd));
++	else {
++		first_seg->packet_type = dpaa2_dev_rx_parse(
+ 			 (uint64_t)DPAA2_IOVA_TO_VADDR(DPAA2_GET_FD_ADDR(fd))
+ 			 + DPAA2_FD_PTA_SIZE);
+-	dpaa2_dev_rx_offload((uint64_t)DPAA2_IOVA_TO_VADDR(
++		dpaa2_dev_rx_offload((uint64_t)DPAA2_IOVA_TO_VADDR(
+ 			DPAA2_GET_FD_ADDR(fd)) +
+ 			DPAA2_FD_PTA_SIZE, first_seg);
++	}
+ 	rte_mbuf_refcnt_set(first_seg, 1);
+ 	cur_seg = first_seg;
+ 	while (!DPAA2_SG_IS_FINAL(sge)) {
+@@ -208,14 +281,21 @@ eth_fd_to_mbuf(const struct qbman_fd *fd)
+ 	mbuf->pkt_len = mbuf->data_len;
+ 
+ 	/* Parse the packet */
+-	/* parse results are after the private - sw annotation area */
+-	mbuf->packet_type = dpaa2_dev_rx_parse(
++	/* parse results for LX2 are there in FRC field of FD.
++	 * For other DPAA2 platforms , parse results are after
++	 * the private - sw annotation area
++	 */
++
++	if (dpaa2_svr_family == SVR_LX2160A)
++		dpaa2_dev_rx_parse_frc(mbuf, DPAA2_GET_FD_FRC_PARSE_SUM(fd));
++	else {
++		mbuf->packet_type = dpaa2_dev_rx_parse(
+ 			(uint64_t)DPAA2_IOVA_TO_VADDR(DPAA2_GET_FD_ADDR(fd))
+ 			 + DPAA2_FD_PTA_SIZE);
+-
+-	dpaa2_dev_rx_offload((uint64_t)DPAA2_IOVA_TO_VADDR(
++		dpaa2_dev_rx_offload((uint64_t)DPAA2_IOVA_TO_VADDR(
+ 			     DPAA2_GET_FD_ADDR(fd)) +
+ 			     DPAA2_FD_PTA_SIZE, mbuf);
++	}
+ 
+ 	mbuf->next = NULL;
+ 	rte_mbuf_refcnt_set(mbuf, 1);
+-- 
+2.14.3
+

@@ -1,0 +1,50 @@
+From 62e4d8f56d465fc9018770b0ab9bbd9c1315ffd3 Mon Sep 17 00:00:00 2001
+From: Nikhil Agarwal <nikhil.agarwal@linaro.org>
+Date: Tue, 12 Dec 2017 15:38:25 +0530
+Subject: [PATCH 067/166] examples/l3fwd-power: replace desc done with Rx queue
+ count
+
+HW queue based platforms may not support descriptor done API.
+This patch changes the usages to rx_queue_count API, which
+is more generic.
+
+Signed-off-by: Nikhil Agarwal <nikhil.agarwal@linaro.org>
+Acked-by: David Hunt <david.hunt@intel.com>
+---
+ examples/l3fwd-power/main.c | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+
+diff --git a/examples/l3fwd-power/main.c b/examples/l3fwd-power/main.c
+index 50c3702f6cf4..4ddd04c6ea50 100644
+--- a/examples/l3fwd-power/main.c
++++ b/examples/l3fwd-power/main.c
+@@ -755,6 +755,7 @@ power_freq_scaleup_heuristic(unsigned lcore_id,
+ 			     uint16_t port_id,
+ 			     uint16_t queue_id)
+ {
++	uint32_t rxq_count = rte_eth_rx_queue_count(port_id, queue_id);
+ /**
+  * HW Rx queue size is 128 by default, Rx burst read at maximum 32 entries
+  * per iteration
+@@ -766,15 +767,12 @@ power_freq_scaleup_heuristic(unsigned lcore_id,
+ #define FREQ_UP_TREND2_ACC   100
+ #define FREQ_UP_THRESHOLD    10000
+ 
+-	if (likely(rte_eth_rx_descriptor_done(port_id, queue_id,
+-			FREQ_GEAR3_RX_PACKET_THRESHOLD) > 0)) {
++	if (likely(rxq_count > FREQ_GEAR3_RX_PACKET_THRESHOLD)) {
+ 		stats[lcore_id].trend = 0;
+ 		return FREQ_HIGHEST;
+-	} else if (likely(rte_eth_rx_descriptor_done(port_id, queue_id,
+-			FREQ_GEAR2_RX_PACKET_THRESHOLD) > 0))
++	} else if (likely(rxq_count > FREQ_GEAR2_RX_PACKET_THRESHOLD))
+ 		stats[lcore_id].trend += FREQ_UP_TREND2_ACC;
+-	else if (likely(rte_eth_rx_descriptor_done(port_id, queue_id,
+-			FREQ_GEAR1_RX_PACKET_THRESHOLD) > 0))
++	else if (likely(rxq_count > FREQ_GEAR1_RX_PACKET_THRESHOLD))
+ 		stats[lcore_id].trend += FREQ_UP_TREND1_ACC;
+ 
+ 	if (likely(stats[lcore_id].trend > FREQ_UP_THRESHOLD)) {
+-- 
+2.14.3
+

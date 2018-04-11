@@ -1,0 +1,154 @@
+From 7130ceeac23859ab66d0c09a8849f562c8a6e080 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:20 +0530
+Subject: [PATCH 006/166] bus/fslmc: add qman HW fq query count API
+
+This patch add support for rx query debug API.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/Makefile                        |  3 +-
+ drivers/bus/fslmc/qbman/include/fsl_qbman_debug.h | 30 +++++++++++
+ drivers/bus/fslmc/qbman/qbman_debug.c             | 66 +++++++++++++++++++++++
+ drivers/bus/fslmc/rte_bus_fslmc_version.map       |  2 +
+ 4 files changed, 100 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/bus/fslmc/qbman/include/fsl_qbman_debug.h
+ create mode 100644 drivers/bus/fslmc/qbman/qbman_debug.c
+
+diff --git a/drivers/bus/fslmc/Makefile b/drivers/bus/fslmc/Makefile
+index c08b2af9d488..7ab39cb97db3 100644
+--- a/drivers/bus/fslmc/Makefile
++++ b/drivers/bus/fslmc/Makefile
+@@ -62,7 +62,8 @@ EXPORT_MAP := rte_bus_fslmc_version.map
+ LIBABIVER := 1
+ 
+ SRCS-$(CONFIG_RTE_LIBRTE_FSLMC_BUS) += \
+-        qbman/qbman_portal.c
++        qbman/qbman_portal.c \
++        qbman/qbman_debug.c
+ 
+ SRCS-$(CONFIG_RTE_LIBRTE_FSLMC_BUS) += \
+ 	mc/dpmng.c \
+diff --git a/drivers/bus/fslmc/qbman/include/fsl_qbman_debug.h b/drivers/bus/fslmc/qbman/include/fsl_qbman_debug.h
+new file mode 100644
+index 000000000000..072ad551c548
+--- /dev/null
++++ b/drivers/bus/fslmc/qbman/include/fsl_qbman_debug.h
+@@ -0,0 +1,30 @@
++/* Copyright (C) 2015 Freescale Semiconductor, Inc.
++ *
++ * SPDX-License-Identifier:        BSD-3-Clause
++ */
++struct qbman_swp;
++
++struct qbman_fq_query_np_rslt {
++uint8_t verb;
++	uint8_t rslt;
++	uint8_t st1;
++	uint8_t st2;
++	uint8_t reserved[2];
++	uint16_t od1_sfdr;
++	uint16_t od2_sfdr;
++	uint16_t od3_sfdr;
++	uint16_t ra1_sfdr;
++	uint16_t ra2_sfdr;
++	uint32_t pfdr_hptr;
++	uint32_t pfdr_tptr;
++	uint32_t frm_cnt;
++	uint32_t byte_cnt;
++	uint16_t ics_surp;
++	uint8_t is;
++	uint8_t reserved2[29];
++};
++
++int qbman_fq_query_state(struct qbman_swp *s, uint32_t fqid,
++			 struct qbman_fq_query_np_rslt *r);
++uint32_t qbman_fq_state_frame_count(const struct qbman_fq_query_np_rslt *r);
++uint32_t qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r);
+diff --git a/drivers/bus/fslmc/qbman/qbman_debug.c b/drivers/bus/fslmc/qbman/qbman_debug.c
+new file mode 100644
+index 000000000000..591673abc76e
+--- /dev/null
++++ b/drivers/bus/fslmc/qbman/qbman_debug.c
+@@ -0,0 +1,66 @@
++/* Copyright (C) 2015 Freescale Semiconductor, Inc.
++ *
++ * SPDX-License-Identifier:        BSD-3-Clause
++ */
++
++#include "compat.h"
++#include <fsl_qbman_debug.h>
++#include "qbman_portal.h"
++
++/* QBMan portal management command code */
++#define QBMAN_BP_QUERY            0x32
++#define QBMAN_FQ_QUERY            0x44
++#define QBMAN_FQ_QUERY_NP         0x45
++#define QBMAN_WQ_QUERY            0x47
++#define QBMAN_CGR_QUERY           0x51
++#define QBMAN_WRED_QUERY          0x54
++#define QBMAN_CGR_STAT_QUERY      0x55
++#define QBMAN_CGR_STAT_QUERY_CLR  0x56
++
++struct qbman_fq_query_desc {
++	uint8_t verb;
++	uint8_t reserved[3];
++	uint32_t fqid;
++	uint8_t reserved2[57];
++};
++
++int qbman_fq_query_state(struct qbman_swp *s, uint32_t fqid,
++			 struct qbman_fq_query_np_rslt *r)
++{
++	struct qbman_fq_query_desc *p;
++
++	p = (struct qbman_fq_query_desc *)qbman_swp_mc_start(s);
++	if (!p)
++		return -EBUSY;
++
++	p->fqid = fqid;
++	*r = *(struct qbman_fq_query_np_rslt *)qbman_swp_mc_complete(s, p,
++						QBMAN_FQ_QUERY_NP);
++	if (!r) {
++		pr_err("qbman: Query FQID %d NP fields failed, no response\n",
++		       fqid);
++		return -EIO;
++	}
++
++	/* Decode the outcome */
++	QBMAN_BUG_ON((r->verb & QBMAN_RESPONSE_VERB_MASK) != QBMAN_FQ_QUERY_NP);
++
++	/* Determine success or failure */
++	if (r->rslt != QBMAN_MC_RSLT_OK) {
++		pr_err("Query NP fields of FQID 0x%x failed, code=0x%02x\n",
++		       fqid, r->rslt);
++		return -EIO;
++	}
++
++	return 0;
++}
++
++uint32_t qbman_fq_state_frame_count(const struct qbman_fq_query_np_rslt *r)
++{
++	return (r->frm_cnt & 0x00FFFFFF);
++}
++
++uint32_t qbman_fq_state_byte_count(const struct qbman_fq_query_np_rslt *r)
++{
++	return r->byte_cnt;
++}
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index f266d6d0e664..f59fc671f6ac 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -95,5 +95,7 @@ DPDK_18.02 {
+ 
+ 	dpaa2_svr_family;
+ 	dpaa2_virt_mode;
++	qbman_fq_query_state;
++	qbman_fq_state_frame_count;
+ 
+ } DPDK_17.11;
+-- 
+2.14.3
+

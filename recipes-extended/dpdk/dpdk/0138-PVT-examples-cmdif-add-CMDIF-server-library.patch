@@ -1,0 +1,1244 @@
+From f651ed0a2611df1d910ffba4094b83610c9ee01f Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 19 Feb 2018 12:45:49 +0530
+Subject: [PATCH 138/166] PVT: examples/cmdif: add CMDIF server library
+
+This code has been taken from the FLIb provided by AIOPSL:
+'https://bitbucket.sw.nxp.com/projects/DPAA2/repos/
+aiopsl/browse?at=refs%2Fheads%2Fdevelop'
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ doc/api/doxy-api-index.md                    |   1 +
+ doc/api/doxy-api.conf                        |   6 +-
+ examples/cmdif/lib/Makefile                  |   3 +
+ examples/cmdif/lib/server/cmdif_srv_flib.c   | 410 +++++++++++++++++++++++++++
+ examples/cmdif/lib/server/cmdif_srv_flib.h   |  88 ++++++
+ examples/cmdif/lib/server/cmdif_srv_gpp.c    | 212 ++++++++++++++
+ examples/cmdif/lib/server/fsl_cmdif_flib_s.h | 213 ++++++++++++++
+ examples/cmdif/lib/server/fsl_cmdif_server.h | 212 ++++++++++++++
+ 8 files changed, 1143 insertions(+), 2 deletions(-)
+ create mode 100644 examples/cmdif/lib/server/cmdif_srv_flib.c
+ create mode 100644 examples/cmdif/lib/server/cmdif_srv_flib.h
+ create mode 100644 examples/cmdif/lib/server/cmdif_srv_gpp.c
+ create mode 100644 examples/cmdif/lib/server/fsl_cmdif_flib_s.h
+ create mode 100644 examples/cmdif/lib/server/fsl_cmdif_server.h
+
+diff --git a/doc/api/doxy-api-index.md b/doc/api/doxy-api-index.md
+index dc8444012664..98f7751c7e1a 100644
+--- a/doc/api/doxy-api-index.md
++++ b/doc/api/doxy-api-index.md
+@@ -65,6 +65,7 @@ The public API headers are grouped by topics:
+   [dpaa2]              (@ref rte_dpaa2_mempool.h),
+   [dpaa2_cmdif]        (@ref rte_pmd_dpaa2_cmdif.h),
+   [dpaa2_cmdif_client] (@ref fsl_cmdif_client.h),
++  [dpaa2_cmdif_server] (@ref fsl_cmdif_server.h),
+   [crypto_scheduler]   (@ref rte_cryptodev_scheduler.h)
+ 
+ - **memory**:
+diff --git a/doc/api/doxy-api.conf b/doc/api/doxy-api.conf
+index 668c2eb0485d..44893ab20992 100644
+--- a/doc/api/doxy-api.conf
++++ b/doc/api/doxy-api.conf
+@@ -80,10 +80,12 @@ INPUT                   = doc/api/doxy-api-index.md \
+                           lib/librte_table \
+                           lib/librte_timer \
+                           lib/librte_vhost \
+-                          examples/cmdif/lib/client
++                          examples/cmdif/lib/client \
++                          examples/cmdif/lib/server
+ FILE_PATTERNS           = rte_*.h \
+                           cmdline.h \
+-                          fsl_cmdif_client.h
++                          fsl_cmdif_client.h \
++                          fsl_cmdif_server.h
+ PREDEFINED              = __DOXYGEN__ \
+                           __attribute__(x)=
+ 
+diff --git a/examples/cmdif/lib/Makefile b/examples/cmdif/lib/Makefile
+index 6ab1a6d25b69..c607410aa165 100644
+--- a/examples/cmdif/lib/Makefile
++++ b/examples/cmdif/lib/Makefile
+@@ -23,11 +23,14 @@ LIBABIVER := 1
+ # all source are stored in SRC-Y
+ SRCS-y += client/cmdif_client_flib.c
+ SRCS-y += client/cmdif_client_gpp.c
++SRCS-y += server/cmdif_srv_flib.c
++SRCS-y += server/cmdif_srv_gpp.c
+ 
+ CFLAGS += -O3
+ CFLAGS += $(WERROR_FLAGS)
+ CFLAGS += -I$(RTE_SDK)/examples/cmdif/lib
+ CFLAGS += -I$(RTE_SDK)/examples/cmdif/lib/client
++CFLAGS += -I$(RTE_SDK)/examples/cmdif/lib/server
+ 
+ LDLIBS += -lrte_eal
+ LDLIBS += -lrte_rawdev
+diff --git a/examples/cmdif/lib/server/cmdif_srv_flib.c b/examples/cmdif/lib/server/cmdif_srv_flib.c
+new file mode 100644
+index 000000000000..73d92039a7d7
+--- /dev/null
++++ b/examples/cmdif/lib/server/cmdif_srv_flib.c
+@@ -0,0 +1,410 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#include <cmdif.h>
++#include <fsl_cmdif_flib_s.h>
++#include <fsl_cmdif_client.h>
++#include <cmdif_srv_flib.h>
++
++#ifndef ENAVAIL
++#define ENAVAIL		119	/*!< Resource not available, or not found */
++#endif
++
++#define UNUSED(_x)	((void)(_x))
++
++#define FREE_MODULE    '\0'
++#define FREE_INSTANCE  (M_NUM_OF_MODULES)
++
++#define SEND_RESP(CMD)	\
++	((!((CMD) & CMDIF_NORESP_CMD)) && ((CMD) != CMD_ID_NOTIFY_CLOSE) && \
++		((CMD) != CMD_ID_NOTIFY_OPEN) && ((CMD) & CMDIF_ASYNC_CMD))
++
++#define CTRL_CB(AUTH_ID, CMD_ID, SIZE, DATA) \
++	(((struct cmdif_srv *)srv)->ctrl_cb[srv->m_id[AUTH_ID]]\
++		(((struct cmdif_srv *)srv)->inst_dev[AUTH_ID], \
++	CMD_ID, SIZE, DATA))
++
++#define CLOSE_CB(AUTH_ID) \
++	(((struct cmdif_srv *)srv)->close_cb\
++		[((struct cmdif_srv *)srv)->m_id[AUTH_ID]] \
++		(((struct cmdif_srv *)srv)->inst_dev[AUTH_ID]))
++
++/** Blocking commands don't need response FD */
++#define SYNC_CMD(CMD)	\
++	((!((CMD) & CMDIF_NORESP_CMD)) && !((CMD) & CMDIF_ASYNC_CMD))
++
++#define IS_VALID_AUTH_ID(ID) \
++	((((struct cmdif_srv *)srv)->inst_dev != NULL) && \
++		((ID) < M_NUM_OF_INSTANCES) && \
++	(((struct cmdif_srv *)srv)->m_id != NULL) && \
++	(((struct cmdif_srv *)srv)->m_id[(ID)] < M_NUM_OF_MODULES))
++
++void *
++cmdif_srv_allocate(void *(*fast_malloc)(int size),
++		   void *(*slow_malloc)(int size))
++{
++	struct cmdif_srv *srv = fast_malloc(sizeof(struct cmdif_srv));
++
++	if (srv == NULL)
++		return NULL;
++
++	/* SHRAM */
++	srv->inst_dev  = fast_malloc(sizeof(void *) * M_NUM_OF_INSTANCES);
++	srv->m_id      = fast_malloc(M_NUM_OF_INSTANCES);
++	srv->ctrl_cb   = fast_malloc(sizeof(ctrl_cb_t *) * M_NUM_OF_MODULES);
++	srv->sync_done = fast_malloc(sizeof(uint64_t) * M_NUM_OF_INSTANCES);
++	/* DDR */
++	srv->m_name    = slow_malloc(sizeof(char[M_NAME_CHARS + 1]) *
++				M_NUM_OF_MODULES);
++	srv->open_cb   = slow_malloc(sizeof(open_cb_t *) * M_NUM_OF_MODULES);
++	srv->close_cb  = slow_malloc(sizeof(close_cb_t *) * M_NUM_OF_MODULES);
++
++	if ((srv->inst_dev == NULL)     || (srv->m_id == NULL)      ||
++		(srv->ctrl_cb == NULL)  || (srv->sync_done == NULL) ||
++		(srv->m_name == NULL)   || (srv->open_cb == NULL)   ||
++		(srv->close_cb == NULL)) {
++		return NULL;
++	}
++
++	memset((uint8_t *)srv->m_name,
++		FREE_MODULE,
++		sizeof(srv->m_name[0]) * M_NUM_OF_MODULES);
++	memset((uint8_t *)srv->inst_dev,
++		0,
++		sizeof(srv->inst_dev[0]) * M_NUM_OF_INSTANCES);
++	memset(srv->m_id,
++		FREE_INSTANCE,
++		M_NUM_OF_INSTANCES);
++
++	srv->inst_count = 0;
++
++	return srv;
++}
++
++void
++cmdif_srv_deallocate(void *_srv, void (*free)(void *ptr))
++{
++	struct  cmdif_srv *srv = (struct  cmdif_srv *)_srv;
++
++	if (srv != NULL) {
++		if (srv->inst_dev)
++			free(srv->inst_dev);
++		if (srv->m_id)
++			free(srv->m_id);
++		if (srv->sync_done)
++			free(srv->sync_done);
++		if (srv->m_name)
++			free(srv->m_name);
++		if (srv->open_cb)
++			free(srv->open_cb);
++		if (srv->ctrl_cb)
++			free(srv->ctrl_cb);
++		if (srv->close_cb)
++			free(srv->close_cb);
++
++		free(srv);
++	}
++}
++
++static int
++empty_open_cb(uint8_t instance_id, void **dev)
++{
++	UNUSED(instance_id);
++	UNUSED(dev);
++	return -ENODEV; /* Must be error for cmdif_srv_unregister() */
++}
++
++static int
++empty_close_cb(void *dev)
++{
++	UNUSED(dev);
++	return -ENODEV; /* Must be error for cmdif_srv_unregister() */
++}
++
++static int
++empty_ctrl_cb(void *dev,
++	      uint16_t cmd,
++	      uint32_t size,
++	      void *data)
++{
++	UNUSED(cmd);
++	UNUSED(dev);
++	UNUSED(size);
++	UNUSED(data);
++	return -ENODEV; /* Must be error for cmdif_srv_unregister() */
++}
++
++static int
++module_id_alloc(struct cmdif_srv *srv,
++		const char *m_name,
++		struct cmdif_module_ops *ops)
++{
++	int i = 0;
++	int id = -ENAVAIL;
++
++	if (m_name[0] == FREE_MODULE)
++		return -EINVAL;
++
++
++	for (i = 0; i < M_NUM_OF_MODULES; i++) {
++		if ((srv->m_name[i][0] == FREE_MODULE) && (id < 0))
++			id = i;
++		else if (strncmp(srv->m_name[i], m_name, M_NAME_CHARS) == 0)
++			return -EEXIST;
++	}
++	if (id >= 0) {
++		strncpy(srv->m_name[id], m_name, M_NAME_CHARS);
++		srv->m_name[id][M_NAME_CHARS] = '\0';
++
++		srv->ctrl_cb[id]  = empty_ctrl_cb;
++		srv->open_cb[id]  = empty_open_cb;
++		srv->close_cb[id] = empty_close_cb;
++
++		if (ops->ctrl_cb)
++			srv->ctrl_cb[id]  = ops->ctrl_cb;
++		if (ops->open_cb)
++			srv->open_cb[id]  = ops->open_cb;
++		if (ops->close_cb)
++			srv->close_cb[id] = ops->close_cb;
++	}
++
++	return id;
++}
++
++static int
++module_id_find(struct cmdif_srv *srv, const char *m_name)
++{
++	int i = 0;
++
++	if (m_name[0] == FREE_MODULE)
++		return -EINVAL;
++
++	for (i = 0; i < M_NUM_OF_MODULES; i++) {
++		if (strncmp(srv->m_name[i], m_name, M_NAME_CHARS) == 0)
++			return i;
++	}
++
++	return -ENAVAIL;
++}
++
++int
++cmdif_srv_register(void *srv,
++		   const char *m_name,
++		   struct cmdif_module_ops *ops)
++{
++
++	int    m_id = 0;
++
++	if ((m_name == NULL) || (ops == NULL) || (srv == NULL))
++		return -EINVAL;
++
++	m_id = module_id_alloc((struct cmdif_srv *)srv, m_name, ops);
++
++	if (m_id < 0)
++		return m_id;
++
++	return 0;
++}
++
++int
++cmdif_srv_unregister(void *srv, const char *m_name)
++{
++	int    m_id = -1;
++
++	if ((m_name == NULL) || (srv == NULL))
++		return -EINVAL;
++
++	m_id = module_id_find((struct cmdif_srv *)srv, m_name);
++	if (m_id >= 0) {
++		((struct cmdif_srv *)srv)->ctrl_cb[m_id]   = empty_ctrl_cb;
++		((struct cmdif_srv *)srv)->open_cb[m_id]   = empty_open_cb;
++		((struct cmdif_srv *)srv)->close_cb[m_id]  = empty_close_cb;
++		((struct cmdif_srv *)srv)->m_name[m_id][0] = FREE_MODULE;
++		return 0;
++	} else {
++		return m_id; /* POSIX error is returned */
++	}
++}
++
++static int
++inst_alloc(struct cmdif_srv *srv, uint8_t m_id)
++{
++	int r = 0;
++	int count = 0;
++
++#ifdef DEBUG
++	if (srv == NULL)
++		return -EINVAL;
++#endif
++
++	r = rand() % M_NUM_OF_INSTANCES;
++	while ((srv->m_id[r] != FREE_INSTANCE) &&
++		(count < M_NUM_OF_INSTANCES)) {
++		r = rand() % M_NUM_OF_INSTANCES;
++		count++;
++	}
++
++	/* didn't find empty space yet */
++	if (srv->m_id[r] != FREE_INSTANCE) {
++		count = 0;
++		while ((srv->m_id[r] != FREE_INSTANCE) &&
++			(count < M_NUM_OF_INSTANCES)) {
++			r = r % M_NUM_OF_INSTANCES;
++			r++;
++			count++;
++		}
++	}
++
++	/* didn't find empty space */
++	if (count >= M_NUM_OF_INSTANCES)
++		return -ENAVAIL;
++
++	srv->m_id[r] = m_id;
++	srv->inst_count++;
++	return r;
++}
++
++static void
++inst_dealloc(int inst, struct cmdif_srv *srv)
++{
++	srv->m_id[inst] = FREE_INSTANCE;
++	srv->inst_count--;
++}
++
++int
++cmdif_srv_open(void *_srv,
++	       const char *m_name,
++	       uint8_t inst_id,
++	       uint32_t dpci_id,
++	       uint32_t size __rte_unused,
++	       void *v_data,
++	       uint16_t *auth_id)
++{
++	int    err = 0;
++	int    m_id = 0;
++	int    id = 0;
++	struct cmdif_srv *srv = (struct cmdif_srv *)_srv;
++	struct cmdif_session_data *data = v_data;
++	void   *dev = NULL;
++
++#ifdef DEBUG
++	if ((uint64_t)v_data & 0x7)
++		return -EINVAL;
++
++	if ((v_data != NULL) && (size < CMDIF_SESSION_OPEN_SIZEOF))
++		return -EINVAL;
++
++	if (auth_id == NULL)
++		return -EINVAL;
++#endif
++
++	m_id = module_id_find(srv, m_name);
++	if (m_id < 0)
++		return m_id;
++
++	err = srv->open_cb[m_id](inst_id, &dev);
++	if (err)
++		return err;
++
++	id = inst_alloc(srv, (uint8_t)m_id);
++	if (id < 0)
++		return id;
++
++	srv->inst_dev[id]  = dev;
++	srv->sync_done[id] = (uint64_t)v_data;
++	*auth_id = (uint16_t)id;
++
++	/* Sending */
++	if (data != NULL) {
++		data->done    = 0;
++		data->err     = 0;
++		data->dev_id  = CPU_TO_SRV32(dpci_id);
++		data->auth_id = *auth_id;
++		data->inst_id = inst_id;
++		strncpy(&data->m_name[0], m_name, M_NAME_CHARS);
++		data->m_name[M_NAME_CHARS] = '\0';
++	}
++
++	return 0;
++}
++
++int
++cmdif_srv_close(void *srv,
++		uint16_t auth_id,
++		uint32_t dpci_id,
++		uint32_t size __rte_unused,
++		void *v_data)
++{
++	struct cmdif_session_data *data = v_data;
++
++#ifdef DEBUG
++	if ((v_data != NULL) && (size < CMDIF_SESSION_OPEN_SIZEOF))
++		return -EINVAL;
++#endif
++
++	if (!IS_VALID_AUTH_ID(auth_id))
++		return -EINVAL;
++
++	CLOSE_CB(auth_id);
++
++	inst_dealloc(auth_id, srv);
++	if (data != NULL) {
++		data->auth_id = auth_id;
++		data->dev_id  = CPU_TO_SRV32(dpci_id); /* 1 DPCI = 1 Server */
++	}
++
++	return 0;
++}
++
++int
++cmdif_srv_cmd(void *_srv,
++	      struct cmdif_fd *cfd,
++	      void   *v_addr,
++	      struct cmdif_fd *cfd_out,
++	      uint8_t *send_resp)
++{
++	int    err = 0;
++	struct cmdif_srv *srv = (struct cmdif_srv *)_srv;
++	struct cmdif_fd in_cfd;
++
++#ifdef DEBUG
++	if ((cfd == NULL) || (srv == NULL) || (send_resp == NULL))
++		return -EINVAL;
++#endif
++
++	/* This is required because flc is a struct */
++	in_cfd.u_flc.flc = CPU_TO_BE64(cfd->u_flc.flc);
++
++	if (!IS_VALID_AUTH_ID(in_cfd.u_flc.cmd.auth_id))
++		return -EPERM;
++
++	*send_resp = SEND_RESP(in_cfd.u_flc.cmd.cmid);
++
++	if (*send_resp && (cfd_out == NULL))
++		return -EINVAL;
++
++	err = CTRL_CB(in_cfd.u_flc.cmd.auth_id,
++		in_cfd.u_flc.cmd.cmid,
++		cfd->d_size,
++		(void *)((v_addr != NULL) ?
++			(uint64_t)(v_addr) : cfd->u_addr.d_addr));
++
++	if (SYNC_CMD(in_cfd.u_flc.cmd.cmid)) {
++		if (srv->sync_done[in_cfd.u_flc.cmd.auth_id]) {
++			struct cmdif_session_data *sync_done =
++				(struct cmdif_session_data *)
++				srv->sync_done[in_cfd.u_flc.cmd.auth_id];
++			sync_done->err = (int8_t)err;
++			sync_done->done = 1;
++			sync_done->auth_id = in_cfd.u_flc.cmd.auth_id;
++		}
++
++	} else if (*send_resp) {
++		*cfd_out = *cfd;
++		in_cfd.u_flc.cmd.err = (uint8_t)err;
++		cfd_out->u_flc.flc   = CPU_TO_BE64(in_cfd.u_flc.flc);
++	}
++
++	return 0;
++}
+diff --git a/examples/cmdif/lib/server/cmdif_srv_flib.h b/examples/cmdif/lib/server/cmdif_srv_flib.h
+new file mode 100644
+index 000000000000..06e6997a422d
+--- /dev/null
++++ b/examples/cmdif/lib/server/cmdif_srv_flib.h
+@@ -0,0 +1,88 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __CMDIF_SRV_FLIB_H__
++#define __CMDIF_SRV_FLIB_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <fsl_cmdif_server.h>
++
++/* FLC */
++#define CMD_ID_MASK	   0x00000000FFFF0000
++#define CMD_ID_OFF	   16
++
++/* FLC[hash] */
++#define AUTH_ID_MASK	   0xFFFF000000000000
++#define AUTH_ID_OFF	   48
++/* FLC[hash] */
++#define ERROR_MASK	   0x000000FF00000000
++#define ERROR_OFF	   32
++/* FLC[hash] */
++#define DEV_H_MASK	   0x0000FF0000000000
++#define DEV_H_OFF	   40
++/* FLC[hash] */
++#define INST_ID_MASK	   DEV_H_MASK
++#define INST_ID_OFF	   DEV_H_OFF
++
++#define CMD_ID_OPEN           0x8000
++#define CMD_ID_CLOSE          0x4000
++/* Must be power of 2 */
++#define M_NUM_OF_INSTANCES    512
++#define M_NUM_OF_MODULES      64
++#define M_NAME_CHARS          8
++/* 1 Byte must be reserved for done bit */
++#define SYNC_BUFF_RESERVED    1
++
++/** auth_id that will be sent as hash value for open commands */
++#define OPEN_AUTH_ID          0xFFFF
++#define CMDIF_SESSION_OPEN_SIZEOF (sizeof(struct cmdif_session_data))
++
++/** Structure to hold CMDIF server info */
++struct cmdif_srv {
++	/** pointer to arrays of module name per module, DDR */
++	char         (*m_name)[M_NAME_CHARS + 1];
++	/** open(init) callbacks, one per module, DDR */
++	open_cb_t    **open_cb;
++	/** close(de-init) callbacks, one per module, DDR*/
++	close_cb_t   **close_cb;
++	/** execution callbacks one per module, SHRAM */
++	ctrl_cb_t    **ctrl_cb;
++	/** array of instances handels(converted from the authentication ID)
++	 * in the size of M_NUM_OF_INSTANCES, SHRAM
++	 */
++	void         **inst_dev;
++	/** array of physical addresses per instance for setting done
++	 * for synchronious commands, SHRAM
++	 */
++	uint64_t     *sync_done;
++	/** converts auth_id to module for cb, SHRAM */
++	uint8_t      *m_id;
++	/** counter for instance handlers */
++	uint16_t     inst_count;
++};
++
++/**
++ * Structure to hold CMDIF sesstion data
++ * Must remain in this order because of client side
++ */
++struct cmdif_session_data {
++	/** Reserved for done on response */
++	uint8_t  done;
++	/** Reserved for done on response */
++	int8_t   err;
++	uint16_t auth_id;
++	/** CI device id, DPCI id */
++	uint32_t dev_id;
++	uint8_t  inst_id;
++	char     m_name[M_NAME_CHARS + 1];
++};
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __CMDIF_SRV_H__ */
+diff --git a/examples/cmdif/lib/server/cmdif_srv_gpp.c b/examples/cmdif/lib/server/cmdif_srv_gpp.c
+new file mode 100644
+index 000000000000..892fea93955a
+--- /dev/null
++++ b/examples/cmdif/lib/server/cmdif_srv_gpp.c
+@@ -0,0 +1,212 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#include <stdlib.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <errno.h>
++#include <string.h>
++
++#include <rte_atomic.h>
++#include <rte_log.h>
++#include <rte_rawdev.h>
++#include <rte_pmd_dpaa2_cmdif.h>
++
++#include <fsl_cmdif_flib_s.h>
++#include <fsl_cmdif_client.h>
++#include <cmdif.h>
++
++/*
++ * This is server handle. it is set using cmdif_srv_allocate().
++ */
++static void *srv;
++static rte_atomic16_t module_count;
++
++static int
++gpp_cmdif_srv_init(void)
++{
++	srv = cmdif_srv_allocate((void * (*)(int))(malloc),
++		(void * (*)(int))(malloc));
++	if (srv == NULL)
++		return -ENOMEM;
++
++	return 0;
++}
++
++static void
++gpp_cmdif_srv_free(void)
++{
++	cmdif_srv_deallocate(srv, free);
++	srv = NULL;
++}
++
++int
++cmdif_register_module(const char *m_name, struct cmdif_module_ops *ops)
++{
++	int ret;
++
++	/* Place here lock if required */
++
++	if (rte_atomic16_add_return(&module_count, 1) == 1) {
++		ret = gpp_cmdif_srv_init();
++		if (ret != 0) {
++			RTE_LOG(ERR, CMDIF, "CMDIF srv Initalization failed\n");
++			return ret;
++		}
++
++		ret = cmdif_srv_register(srv, m_name, ops);
++		if (ret != 0)
++			gpp_cmdif_srv_free();
++		return ret;
++	}
++
++	return cmdif_srv_register(srv, m_name, ops);
++}
++
++int
++cmdif_unregister_module(const char *m_name)
++{
++	int ret;
++
++	/* Place here lock if required */
++
++	ret = cmdif_srv_unregister(srv, m_name);
++	if (ret != 0) {
++		RTE_LOG(ERR, CMDIF, "cmdif_srv_unregister failed\n");
++		return ret;
++	}
++
++	if (rte_atomic16_sub_return(&module_count, 1) == 0)
++		gpp_cmdif_srv_free();
++
++	return ret;
++}
++
++int
++cmdif_srv_cb(int pr, void *send_dev)
++{
++	struct rte_dpaa2_cmdif_context cmdif_rcv_cnxt;
++	uint64_t dpci_devid = (uint64_t)(send_dev);
++	struct rte_rawdev_buf buf_in, buf_out;
++	struct rte_rawdev_buf *recv_buf = &buf_in, *send_buf = &buf_out;
++	struct  cmdif_fd cfd_out;
++	struct  cmdif_fd cfd;
++	uint8_t send_resp = 0;
++	int pkt_rcvd;
++	int err = 0;
++
++	if (srv == NULL)
++		return -ENODEV;
++
++	cmdif_rcv_cnxt.priority = pr;
++	pkt_rcvd = rte_rawdev_dequeue_buffers((uint16_t)(dpci_devid),
++		&recv_buf, 1, &cmdif_rcv_cnxt);
++	if (pkt_rcvd < 0) {
++		RTE_LOG(ERR, CMDIF, "Error calling buffer dequeue\n");
++		return pkt_rcvd;
++	}
++
++	if (pkt_rcvd == 0)
++		return -ENODATA;
++
++	cfd.u_addr.d_addr = (uint64_t)buf_in.buf_addr;
++	cfd.d_size = cmdif_rcv_cnxt.size;
++	cfd.u_frc.frc = cmdif_rcv_cnxt.frc;
++	cfd.u_flc.flc = cmdif_rcv_cnxt.flc;
++
++	/* Call ctrl cb; if no perm cfd_out will be invalid */
++	err = cmdif_srv_cmd(srv, &cfd, 0, &cfd_out, &send_resp);
++	/*
++	 * don't bother to send response in order not to overload
++	 * response queue, it might be intentional attack
++	 */
++	if (err) {
++		if (err == -EPERM)
++			RTE_LOG(ERR, CMDIF, "Got cmd with invalid auth_id\n");
++		else if (err == -EINVAL)
++			RTE_LOG(ERR, CMDIF, "Inv. parameters for cmdif_srv_cmd\n");
++		return err;
++	}
++	if (send_resp) {
++		struct rte_dpaa2_cmdif_context cmdif_send_cnxt;
++
++		buf_out.buf_addr = (void *)cfd_out.u_addr.d_addr;
++		cmdif_send_cnxt.size = cfd_out.d_size;
++		cmdif_send_cnxt.frc = cfd_out.u_frc.frc;
++		cmdif_send_cnxt.flc = cfd_out.u_flc.flc;
++		cmdif_send_cnxt.priority = pr;
++
++		err = rte_rawdev_enqueue_buffers((uint16_t)(dpci_devid),
++			&send_buf, 1, &cmdif_send_cnxt);
++		if (err)
++			RTE_LOG(ERR, CMDIF, "enqueue of buffer failed\n");
++	}
++
++	return err;
++}
++
++int
++cmdif_session_open(struct cmdif_desc *cidesc,
++		   const char *m_name,
++		   uint8_t inst_id,
++		   uint32_t size,
++		   void *v_data,
++		   void *send_dev,
++		   uint16_t *auth_id)
++{
++	uint64_t dpci_devid = (uint64_t)(send_dev);
++	uint64_t dpci_obj_id;
++	int err = 0;
++
++	err = rte_rawdev_get_attr((uint16_t)dpci_devid, NULL, &dpci_obj_id);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif rawdev attribute get failed\n");
++		return err;
++	}
++
++	/* Place here lock if required */
++
++	/* Call open_cb , Store dev */
++	err = cmdif_srv_open(srv, m_name, inst_id, dpci_obj_id, size, v_data,
++			auth_id);
++	if (err)
++		return err;
++
++	/* Send information to AIOP */
++	err = cmdif_send(cidesc, CMD_ID_NOTIFY_OPEN, size, CMDIF_PRI_LOW,
++			(uint64_t)(v_data), NULL, NULL);
++
++	return err;
++}
++
++int
++cmdif_session_close(struct cmdif_desc *cidesc,
++		    uint16_t auth_id,
++		    uint32_t size,
++		    void *v_data,
++		    void *send_dev)
++{
++	uint64_t dpci_devid = (uint64_t)(send_dev);
++	uint64_t dpci_obj_id;
++	int err = 0;
++
++	err = rte_rawdev_get_attr((uint16_t)dpci_devid, NULL, &dpci_obj_id);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif rawdev attribute get failed\n");
++		return err;
++	}
++
++	/* Place here lock if required */
++
++	/* Call close_cb , place dpci_id, auth_id inside p_data */
++	err = cmdif_srv_close(srv, auth_id, dpci_obj_id, size, v_data);
++	if (err)
++		return err;
++
++	/* Send information to AIOP */
++	err = cmdif_send(cidesc, CMD_ID_NOTIFY_CLOSE, size, CMDIF_PRI_LOW,
++			(uint64_t)(v_data), NULL, NULL);
++
++	return err;
++}
+diff --git a/examples/cmdif/lib/server/fsl_cmdif_flib_s.h b/examples/cmdif/lib/server/fsl_cmdif_flib_s.h
+new file mode 100644
+index 000000000000..8af971d0ea0e
+--- /dev/null
++++ b/examples/cmdif/lib/server/fsl_cmdif_flib_s.h
+@@ -0,0 +1,213 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __FSL_CMDIF_FLIB_S_H__
++#define __FSL_CMDIF_FLIB_S_H__
++
++/**
++ * @file
++ *
++ * API to be used for FD based command interface implementation
++ *
++ * This is external API that is used to implement the final API as defined at
++ * fsl_cmdif_client.h and fsl_cmdif_server.h. For client and server external use
++ * only the API from fsl_cmdif_client.h and fsl_cmdif_server.h.
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <sys/types.h>
++#include <fsl_cmdif_server.h>
++#include <fsl_cmdif_flib_fd.h>
++
++/** Special command for cmdif_session_open() */
++#define CMD_ID_NOTIFY_OPEN    0xF000
++/** Special command for cmdif_session_close() */
++#define CMD_ID_NOTIFY_CLOSE   0xE000
++
++/**
++ * Allocate server handle to be used by server FLIBs.
++ *
++ * Should be used one time during server initialization.
++ *
++ * @param fast_malloc
++ *   Malloc function for fast memory allocation that is accessed
++ *   for every command.
++ * @param slow_malloc
++ *   Malloc function for slow memory allocation, this memory will
++ *   be used to malloc data that is accessed only during initialization.
++ *
++ * @returns
++ *   - Valid pointer on success
++ *   - NULL in case of error
++ */
++void *cmdif_srv_allocate(void *(*fast_malloc)(int),
++			 void *(*slow_malloc)(int));
++
++/**
++ * Deallocate server handle allocated by cmdif_srv_allocate().
++ *
++ * Should be used one time during server shutdown.
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param free
++ *   Function to be used to free server allocated memory.
++ *
++ * @returns
++ *   void
++ */
++void cmdif_srv_deallocate(void *srv,
++			  void (*free)(void *ptr));
++
++/**
++ * Unregister module under server.
++ *
++ * Should be used to implement cmdif_unregister_module.
++ * This function is not multitask protected.
++ * Wrap it with locks if required.
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param m_name
++ *   Module name to unregister
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_unregister(void *srv,
++			 const char *m_name);
++
++/**
++ * Register module under server.
++ *
++ * Should be used to implement cmdif_register_module.
++ * This function is not multitask protected.
++ * Wrap it with locks if required.
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param m_name
++ *   Module name to unregister
++ * @param ops
++ *   Module callback functions
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_register(void *srv,
++		       const char *m_name,
++		       struct cmdif_module_ops *ops);
++
++/**
++ * Open session on server
++ *
++ * Should be used for implementation of cmdif_session_open()
++ * or inside cmdif_srv_cb().
++ * This API is to be used to create a session on server.
++ * Session information will be placed inside v_data, this buffer can be send to
++ * the other side using #CMD_ID_NOTIFY_OPEN command.
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param m_name
++ *   Name of the module that have been registered using
++ *                         cmdif_srv_register()
++ * @param inst_id
++ *   Instance id which will be passed to #open_cb_t
++ * @param size
++ *   Size of v_data buffer.
++ * @param dev_id
++ *   Transport device id to be used for this session.
++ * @param v_data
++ *   Buffer allocated by user. If not NULL this buffer will carry all
++ *   the information of this session.
++ *   Must be 8 bytes aligned.
++ * @param auth_id
++ *   Session id as returned by server. This is an out parameter.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_open(void *srv,
++		   const char *m_name,
++		   uint8_t inst_id,
++		   uint32_t dev_id,
++		   uint32_t size,
++		   void *v_data,
++		   uint16_t *auth_id);
++
++/**
++ * Close session on server
++ *
++ * Should be used for implementation of cmdif_session_close()
++ * or inside cmdif_srv_cb().
++ * This API is to be used to close a session on server.
++ * Session information will be placed inside v_data, this buffer can be send to
++ * the other side using #CMD_ID_NOTIFY_CLOSE command.
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param auth_id
++ *   Session id as returned by cmdif_srv_open().
++ * @param dev_id
++ *   Transport device id to be used for this session.
++ * @param size
++ *   Size of v_data buffer.
++ * @param v_data
++ *   Buffer allocated by user. If not NULL this buffer will carry all
++ *   the information of this session.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_close(void *srv,
++		    uint16_t auth_id,
++		    uint32_t dev_id,
++		    uint32_t size,
++		    void *v_data);
++
++/**
++ * Server handle command function
++ *
++ * Should be called upon every command frame that have been dequeued.
++ * Use it inside cmdif_srv_cb()
++ *
++ * @param srv
++ *   Server handle allocated by cmdif_srv_allocate()
++ * @param cfd
++ *   CMDIF input frame descriptor
++ * @param v_addr
++ *   Virtual address to be used for ctrl cb.
++ *   This is workaround for SMMU disable mode, set it to NULL if
++ *   cfd->u_addr.d_addr can be passed as #ctrl_cb_t data.
++ *   Otherwise set v_addr as virtual address of cfd->u_addr.d_addr.
++ * @param cfd_out
++ *   CMDIF output frame descriptor, if response is required. This is an
++ *   out parameter and is filled in by the API.
++ * @param send_resp
++ *   Response indication. If set to 1 the response FD must be sent.
++ *   This is an out parameter and is filled in by the API.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_cmd(void *srv,
++		  struct cmdif_fd *cfd,
++		  void   *v_addr,
++		  struct cmdif_fd *cfd_out,
++		  uint8_t *send_resp);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __FSL_CMDIF_FLIB_H__ */
+diff --git a/examples/cmdif/lib/server/fsl_cmdif_server.h b/examples/cmdif/lib/server/fsl_cmdif_server.h
+new file mode 100644
+index 000000000000..bcfe8dc89bb7
+--- /dev/null
++++ b/examples/cmdif/lib/server/fsl_cmdif_server.h
+@@ -0,0 +1,212 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __FSL_CMDIF_SERVER_H__
++#define __FSL_CMDIF_SERVER_H__
++
++/**
++ * @file
++ *
++ * CMDIF Server specific API's
++ *
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/** cmdif_session_open() default size */
++#define CMDIF_SESSION_OPEN_SIZE		64
++
++struct cmdif_desc;
++
++/**
++ * Open callback
++ *
++ * User provides this function.
++ * Server invokes it when it gets open instance command.
++ *
++ * @param instance_id
++ *   Instance id to be specified by client on cmdif_open().
++ * @param dev
++ *   device handle. This is an out parameter and is filled in by the API.
++ *
++ * @return
++ *   - Handle to instance object
++ *   - NULL in case of Failure.
++ */
++typedef int (open_cb_t)(uint8_t instance_id, void **dev);
++
++/**
++ * De-init callback
++ *
++ * User provides this function.
++ * Driver invokes it when it gets close instance command.
++ *
++ * @param dev
++ *   A handle of the device.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++typedef int (close_cb_t)(void *dev);
++
++/**
++ * Control callback
++ *
++ * User provides this function. Driver invokes it for all runtime commands
++ *
++ * @param dev
++ *   A handle of the device which was returned after module open callback
++ * @param cmd
++ *   Id of command
++ * @param size
++ *   Size of the data.
++ *   On the AIOP side use PRC_GET_SEGMENT_LENGTH() to determine the
++ *   size of presented data.
++ * @param data
++ *   Data of the command.
++ *   AIOP server will pass here address to the start of presentation
++ *   segment - physical address is the same as virtual.
++ *   On AIOP use fdma_modify_default_segment_data() if needed.
++ *   On GPP, it should be virtual address that belongs to current SW context.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++typedef int (ctrl_cb_t)(void *dev, uint16_t cmd, uint32_t size, void *data);
++
++/** Function pointers to be supplied during module registration */
++struct cmdif_module_ops {
++	/** Open callback to be activated after client calls cmdif_open() */
++	open_cb_t  *open_cb;
++	/** Close callback to be activated after client calls cmdif_close() */
++	close_cb_t *close_cb;
++	/** Control callback to be activated on each command */
++	ctrl_cb_t  *ctrl_cb;
++};
++
++/**
++ * Registration of a module to the server.
++ *
++ * For AIOP, use this API during AIOP boot.
++ *
++ * Each module needs to register to the command interface by
++ * supplying the following:
++ *
++ * @param module_name
++ *   Module name, it should be a valid string of up to 8 characters.
++ * @param ops
++ *   A structure with 3 callbacks described above for open, close and control
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_register_module(const char *module_name,
++			struct cmdif_module_ops *ops);
++
++/**
++ * Cancel the registration of a module on the server
++ * and free the module id acquired during registration
++ *
++ * For AIOP, use this API during AIOP boot.
++ *
++ * @param module_name
++ *   Module name, up to 8 characters.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_unregister_module(const char *module_name);
++
++/**
++ * Open session on server and notify client about it.
++ *
++ * This functionality is relevant only for GPP.
++ *
++ * @param cidesc
++ *   Already open connection descriptor towards the second side
++ * @param m_name
++ *   Name of the module as registered by cmdif_register_module()
++ * @param inst_id
++ *   Instance id which will be passed to #open_cb_t
++ * @param size
++ *   Size of v_data buffer.
++ *   By default, set it to #CMDIF_SESSION_OPEN_SIZE bytes.
++ * @param v_data
++ *   8 byte aligned buffer allocated by user. If not NULL
++ *   this buffer will carry all the information of this session.
++ *   The buffer can be freed after cmdif_session_close().
++ * @param send_dev
++ *   Transport device to be used for server (dpaa2 device).
++ *   Device used for send and receive of frame descriptor.
++ * @param auth_id
++ *   Session id as returned by server. This is an out parameter.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_session_open(struct cmdif_desc *cidesc,
++		       const char *m_name,
++		       uint8_t inst_id,
++		       uint32_t size,
++		       void *v_data,
++		       void *send_dev,
++		       uint16_t *auth_id);
++
++/**
++ * Close session on server and notify client about it.
++ *
++ * This functionality is relevant only for GPP but it's not yet supported
++ * by the GPP server.
++ *
++ * @param cidesc
++ *   Already open connection descriptor towards second side
++ * @param size
++ *   Size of v_data buffer
++ * @param auth_id
++ *   Session id as returned by server.
++ * @param v_data
++ *   Buffer allocated by user. If not NULL this buffer will carry all the
++ *   information of this session.
++ * @param send_dev
++ *   Transport device used for server (dpaa2 device).
++ *   Device used for send and receive of frame descriptor.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_session_close(struct cmdif_desc *cidesc,
++			uint16_t auth_id,
++			uint32_t size,
++			void *v_data,
++			void *send_dev);
++
++/**
++ * Server callback to be called on every frame command.
++ *
++ * This functionality is relevant only for GPP.
++ *
++ * @param pr
++ *   Priority
++ * @param send_dev
++ *   Device used for send and receive of frame descriptor
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_srv_cb(int pr, void *send_dev);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __FSL_CMDIF_SERVER_H__ */
+-- 
+2.14.3
+

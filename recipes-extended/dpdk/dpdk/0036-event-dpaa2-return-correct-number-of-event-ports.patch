@@ -1,0 +1,32 @@
+From a41a4a572c9e037227b0b6cfb862a98ddbd8baf4 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 3 Jan 2018 22:14:19 +0530
+Subject: [PATCH 036/166] event/dpaa2: return correct number of event ports
+
+In the info get API we were returning number of event
+ports as MAX number of LCORE's. After this change actual
+number of event ports (i.e. number of DPIO's) is provided
+in the info get API.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/event/dpaa2/dpaa2_eventdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index eeeb231272e3..49ac46e1a56f 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -326,7 +326,7 @@ dpaa2_eventdev_info_get(struct rte_eventdev *dev,
+ 		DPAA2_EVENT_MAX_QUEUE_PRIORITY_LEVELS;
+ 	dev_info->max_event_priority_levels =
+ 		DPAA2_EVENT_MAX_EVENT_PRIORITY_LEVELS;
+-	dev_info->max_event_ports = RTE_MAX_LCORE;
++	dev_info->max_event_ports = rte_fslmc_get_device_count(DPAA2_IO);
+ 	dev_info->max_event_port_dequeue_depth =
+ 		DPAA2_EVENT_MAX_PORT_DEQUEUE_DEPTH;
+ 	dev_info->max_event_port_enqueue_depth =
+-- 
+2.14.3
+

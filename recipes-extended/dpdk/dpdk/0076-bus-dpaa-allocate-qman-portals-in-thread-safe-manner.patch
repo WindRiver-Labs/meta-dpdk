@@ -1,0 +1,50 @@
+From a942badd83c50e2416b47cf62d0eeb7c5ba48731 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 17:57:02 +0530
+Subject: [PATCH 076/166] bus/dpaa: allocate qman portals in thread safe manner
+
+Fixes: 9d32ef0f5d61 ("bus/dpaa: support creating dynamic HW portal")
+Cc: stable@dpdk.org
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c | 8 +++-----
+ 1 file changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index b3151a50dc14..3b825a62266b 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -658,7 +658,7 @@ struct qman_portal *qman_create_portal(
+ 
+ #define MAX_GLOBAL_PORTALS 8
+ static struct qman_portal global_portals[MAX_GLOBAL_PORTALS];
+-static int global_portals_used[MAX_GLOBAL_PORTALS];
++rte_atomic16_t global_portals_used[MAX_GLOBAL_PORTALS];
+ 
+ static struct qman_portal *
+ qman_alloc_global_portal(void)
+@@ -666,10 +666,8 @@ qman_alloc_global_portal(void)
+ 	unsigned int i;
+ 
+ 	for (i = 0; i < MAX_GLOBAL_PORTALS; i++) {
+-		if (global_portals_used[i] == 0) {
+-			global_portals_used[i] = 1;
++		if (rte_atomic16_test_and_set(&global_portals_used[i]))
+ 			return &global_portals[i];
+-		}
+ 	}
+ 	pr_err("No portal available (%x)\n", MAX_GLOBAL_PORTALS);
+ 
+@@ -683,7 +681,7 @@ qman_free_global_portal(struct qman_portal *portal)
+ 
+ 	for (i = 0; i < MAX_GLOBAL_PORTALS; i++) {
+ 		if (&global_portals[i] == portal) {
+-			global_portals_used[i] = 0;
++			rte_atomic16_clear(&global_portals_used[i]);
+ 			return 0;
+ 		}
+ 	}
+-- 
+2.14.3
+

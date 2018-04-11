@@ -1,0 +1,383 @@
+From 5c6ccf070fd6d610f494e61b72c1478a09c68015 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 18 Jan 2018 11:42:58 +0530
+Subject: [PATCH 064/166] kni: support for MAC addr change
+
+This patch adds following:
+1. Option to configure the mac address during create. Generate random
+   address only if the user has not provided any valid address.
+2. Inform usespace, if mac address is being changed in linux.
+3. Implement default handling of mac address change in the corresponding
+   ethernet device.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ doc/guides/sample_app_ug/kernel_nic_interface.rst  | 26 +++++++++++++-
+ examples/kni/main.c                                | 36 +++++++++++++++++++
+ .../linuxapp/eal/include/exec-env/rte_kni_common.h |  3 ++
+ lib/librte_eal/linuxapp/kni/kni_misc.c             | 17 +++++----
+ lib/librte_eal/linuxapp/kni/kni_net.c              | 14 +++++++-
+ lib/librte_kni/rte_kni.c                           | 42 ++++++++++++++++++++--
+ lib/librte_kni/rte_kni.h                           |  5 +++
+ test/test/test_kni.c                               |  2 ++
+ 8 files changed, 134 insertions(+), 11 deletions(-)
+
+diff --git a/doc/guides/sample_app_ug/kernel_nic_interface.rst b/doc/guides/sample_app_ug/kernel_nic_interface.rst
+index e1ac4153e8e9..2c143daaf738 100644
+--- a/doc/guides/sample_app_ug/kernel_nic_interface.rst
++++ b/doc/guides/sample_app_ug/kernel_nic_interface.rst
+@@ -209,6 +209,12 @@ Dumping the network traffic:
+ 
+     #tcpdump -i vEth0_0
+ 
++Change the MAC address:
++
++.. code-block:: console
++
++    #ifconfig vEth0_0 hw ether 0C:01:02:03:04:08
++
+ When the DPDK userspace application is closed, all the KNI devices are deleted from Linux*.
+ 
+ Explanation
+@@ -269,11 +275,15 @@ The code for allocating the kernel NIC interfaces for a specific port is as foll
+                     conf.addr = dev_info.pci_dev->addr;
+                     conf.id = dev_info.pci_dev->id;
+ 
++                    /* Get the interface default mac address */
++                    rte_eth_macaddr_get(port_id, (struct ether_addr *)&conf.mac_addr);
++
+                     memset(&ops, 0, sizeof(ops));
+ 
+                     ops.port_id = port_id;
+                     ops.change_mtu = kni_change_mtu;
+                     ops.config_network_if = kni_config_network_interface;
++                    ops.config_mac_address = kni_config_mac_address;
+ 
+                     kni = rte_kni_alloc(pktmbuf_pool, &conf, &ops);
+                 } else
+@@ -502,13 +512,19 @@ Callbacks for Kernel Requests
+ 
+ To execute specific PMD operations in user space requested by some Linux* commands,
+ callbacks must be implemented and filled in the struct rte_kni_ops structure.
+-Currently, setting a new MTU and configuring the network interface (up/ down) are supported.
++Currently, setting a new MTU, change in mac address and configuring the network interface(up/ down)
++are supported.
++Default implementation for following is available in rte_kni library. Application
++may choose to not implement follwoing callbacks:
++	``config_mac_address``
++
+ 
+ .. code-block:: c
+ 
+     static struct rte_kni_ops kni_ops = {
+         .change_mtu = kni_change_mtu,
+         .config_network_if = kni_config_network_interface,
++        .config_mac_address = kni_config_mac_address,
+     };
+ 
+     /* Callback for request of changing MTU */
+@@ -587,3 +603,11 @@ Currently, setting a new MTU and configuring the network interface (up/ down) ar
+             RTE_LOG(ERR, APP, "Failed to start port %d\n", port_id);
+         return ret;
+     }
++
++    /* Callback for request of configuring device mac address */
++
++    static int
++    kni_config_mac_address(uint16_t port_id, uint8_t mac_addr[])
++    {
++        .....
++    }
+diff --git a/examples/kni/main.c b/examples/kni/main.c
+index 3f173854421c..1c251c214cc2 100644
+--- a/examples/kni/main.c
++++ b/examples/kni/main.c
+@@ -163,6 +163,7 @@ static struct kni_interface_stats kni_stats[RTE_MAX_ETHPORTS];
+ 
+ static int kni_change_mtu(uint16_t port_id, unsigned int new_mtu);
+ static int kni_config_network_interface(uint16_t port_id, uint8_t if_up);
++static int kni_config_mac_address(uint16_t port_id, uint8_t mac_addr[]);
+ 
+ static rte_atomic32_t kni_stop = RTE_ATOMIC32_INIT(0);
+ 
+@@ -766,6 +767,37 @@ kni_config_network_interface(uint16_t port_id, uint8_t if_up)
+ 	return ret;
+ }
+ 
++static void
++print_ethaddr(const char *name, struct ether_addr *mac_addr)
++{
++	char buf[ETHER_ADDR_FMT_SIZE];
++	ether_format_addr(buf, ETHER_ADDR_FMT_SIZE, mac_addr);
++	RTE_LOG(INFO, APP, "\t%s%s\n", name, buf);
++}
++
++/* Callback for request of configuring mac address */
++static int
++kni_config_mac_address(uint16_t port_id, uint8_t mac_addr[])
++{
++	int ret = 0;
++
++	if (port_id >= rte_eth_dev_count() || port_id >= RTE_MAX_ETHPORTS) {
++		RTE_LOG(ERR, APP, "Invalid port id %d\n", port_id);
++		return -EINVAL;
++	}
++
++	RTE_LOG(INFO, APP, "Configure mac address of %d\n", port_id);
++	print_ethaddr("Address:", (struct ether_addr *)mac_addr);
++
++	ret = rte_eth_dev_default_mac_addr_set(port_id,
++					       (struct ether_addr *)mac_addr);
++	if (ret < 0)
++		RTE_LOG(ERR, APP, "Failed to config mac_addr for port %d\n",
++			port_id);
++
++	return ret;
++}
++
+ static int
+ kni_alloc(uint16_t port_id)
+ {
+@@ -809,11 +841,15 @@ kni_alloc(uint16_t port_id)
+ 				conf.addr = dev_info.pci_dev->addr;
+ 				conf.id = dev_info.pci_dev->id;
+ 			}
++			/* Get the interface default mac address */
++			rte_eth_macaddr_get(port_id,
++					(struct ether_addr *)&conf.mac_addr);
+ 
+ 			memset(&ops, 0, sizeof(ops));
+ 			ops.port_id = port_id;
+ 			ops.change_mtu = kni_change_mtu;
+ 			ops.config_network_if = kni_config_network_interface;
++			ops.config_mac_address = kni_config_mac_address;
+ 
+ 			kni = rte_kni_alloc(pktmbuf_pool, &conf, &ops);
+ 		} else
+diff --git a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+index 794cd4f7844c..a7bee7369eff 100644
+--- a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
++++ b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+@@ -81,6 +81,7 @@ enum rte_kni_req_id {
+ 	RTE_KNI_REQ_UNKNOWN = 0,
+ 	RTE_KNI_REQ_CHANGE_MTU,
+ 	RTE_KNI_REQ_CFG_NETWORK_IF,
++	RTE_KNI_REQ_CHANGE_MAC_ADDR,
+ 	RTE_KNI_REQ_MAX,
+ };
+ 
+@@ -93,6 +94,7 @@ struct rte_kni_request {
+ 	union {
+ 		uint32_t new_mtu;    /**< New MTU */
+ 		uint8_t if_up;       /**< 1: interface up, 0: interface down */
++		uint8_t mac_addr[6]; /**< MAC address for interface */
+ 	};
+ 	int32_t result;               /**< Result for processing request */
+ } __attribute__((__packed__));
+@@ -169,6 +171,7 @@ struct rte_kni_device_info {
+ 
+ 	/* mbuf size */
+ 	unsigned mbuf_size;
++	char mac_addr[6];
+ };
+ 
+ #define KNI_DEVICE "kni"
+diff --git a/lib/librte_eal/linuxapp/kni/kni_misc.c b/lib/librte_eal/linuxapp/kni/kni_misc.c
+index 7590f1fdc17b..b524d30cb3e6 100644
+--- a/lib/librte_eal/linuxapp/kni/kni_misc.c
++++ b/lib/librte_eal/linuxapp/kni/kni_misc.c
+@@ -458,12 +458,17 @@ kni_ioctl_create(struct net *net, uint32_t ioctl_num,
+ 
+ 	if (kni->lad_dev)
+ 		ether_addr_copy(net_dev->dev_addr, kni->lad_dev->dev_addr);
+-	else
+-		/*
+-		 * Generate random mac address. eth_random_addr() is the newer
+-		 * version of generating mac address in linux kernel.
+-		 */
+-		random_ether_addr(net_dev->dev_addr);
++	else {
++		/* if user has provided a valid mac address */
++		if (is_valid_ether_addr((unsigned char *)(dev_info.mac_addr)))
++			memcpy(net_dev->dev_addr, dev_info.mac_addr, ETH_ALEN);
++		else
++			/*
++			 * Generate random mac address. eth_random_addr() is the
++			 * newer version of generating mac address in kernel.
++			 */
++			random_ether_addr(net_dev->dev_addr);
++	}
+ 
+ 	ret = register_netdev(net_dev);
+ 	if (ret) {
+diff --git a/lib/librte_eal/linuxapp/kni/kni_net.c b/lib/librte_eal/linuxapp/kni/kni_net.c
+index db9f4898910a..3e02ea1197c0 100644
+--- a/lib/librte_eal/linuxapp/kni/kni_net.c
++++ b/lib/librte_eal/linuxapp/kni/kni_net.c
+@@ -668,12 +668,24 @@ kni_net_rebuild_header(struct sk_buff *skb)
+ static int
+ kni_net_set_mac(struct net_device *netdev, void *p)
+ {
++	int ret;
++	struct rte_kni_request req;
++	struct kni_dev *kni;
+ 	struct sockaddr *addr = p;
+ 
++	memset(&req, 0, sizeof(req));
++	req.req_id = RTE_KNI_REQ_CHANGE_MAC_ADDR;
++
+ 	if (!is_valid_ether_addr((unsigned char *)(addr->sa_data)))
+ 		return -EADDRNOTAVAIL;
++
++	memcpy(req.mac_addr, addr->sa_data, netdev->addr_len);
+ 	memcpy(netdev->dev_addr, addr->sa_data, netdev->addr_len);
+-	return 0;
++
++	kni = netdev_priv(netdev);
++	ret = kni_net_process_request(kni, &req);
++
++	return (ret == 0 ? req.result : ret);
+ }
+ 
+ #ifdef HAVE_CHANGE_CARRIER_CB
+diff --git a/lib/librte_kni/rte_kni.c b/lib/librte_kni/rte_kni.c
+index 8eca8c03baff..63afb7eb36be 100644
+--- a/lib/librte_kni/rte_kni.c
++++ b/lib/librte_kni/rte_kni.c
+@@ -356,6 +356,8 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
+ 	memset(ctx, 0, sizeof(struct rte_kni));
+ 	if (ops)
+ 		memcpy(&ctx->ops, ops, sizeof(struct rte_kni_ops));
++	else
++		ctx->ops.port_id = UINT16_MAX;
+ 
+ 	memset(&dev_info, 0, sizeof(dev_info));
+ 	dev_info.bus = conf->addr.bus;
+@@ -368,6 +370,8 @@ rte_kni_alloc(struct rte_mempool *pktmbuf_pool,
+ 	dev_info.group_id = conf->group_id;
+ 	dev_info.mbuf_size = conf->mbuf_size;
+ 
++	memcpy(dev_info.mac_addr, conf->mac_addr, ETHER_ADDR_LEN);
++
+ 	snprintf(ctx->name, RTE_KNI_NAMESIZE, "%s", intf_name);
+ 	snprintf(dev_info.name, RTE_KNI_NAMESIZE, "%s", intf_name);
+ 
+@@ -528,6 +532,28 @@ rte_kni_release(struct rte_kni *kni)
+ 	return 0;
+ }
+ 
++/* default callback for request of configuring device mac address */
++static int
++kni_config_mac_address(uint16_t port_id, uint8_t mac_addr[])
++{
++	int ret = 0;
++
++	if (port_id >= rte_eth_dev_count() || port_id >= RTE_MAX_ETHPORTS) {
++		RTE_LOG(ERR, KNI, "Invalid port id %d\n", port_id);
++		return -EINVAL;
++	}
++
++	RTE_LOG(INFO, KNI, "Configure mac address of %d", port_id);
++
++	ret = rte_eth_dev_default_mac_addr_set(port_id,
++					       (struct ether_addr *)mac_addr);
++	if (ret < 0)
++		RTE_LOG(ERR, KNI, "Failed to config mac_addr for port %d\n",
++			port_id);
++
++	return ret;
++}
++
+ int
+ rte_kni_handle_request(struct rte_kni *kni)
+ {
+@@ -559,6 +585,14 @@ rte_kni_handle_request(struct rte_kni *kni)
+ 			req->result = kni->ops.config_network_if(\
+ 					kni->ops.port_id, req->if_up);
+ 		break;
++	case RTE_KNI_REQ_CHANGE_MAC_ADDR: /* Change MAC Address */
++		if (kni->ops.config_mac_address)
++			req->result = kni->ops.config_mac_address(
++					kni->ops.port_id, req->mac_addr);
++		else if (kni->ops.port_id != UINT16_MAX)
++			req->result = kni_config_mac_address(
++					kni->ops.port_id, req->mac_addr);
++		break;
+ 	default:
+ 		RTE_LOG(ERR, KNI, "Unknown request id %u\n", req->req_id);
+ 		req->result = -EINVAL;
+@@ -707,7 +741,9 @@ kni_check_request_register(struct rte_kni_ops *ops)
+ 	if( NULL == ops )
+ 		return KNI_REQ_NO_REGISTER;
+ 
+-	if((NULL == ops->change_mtu) && (NULL == ops->config_network_if))
++	if ((ops->change_mtu == NULL)
++		&& (ops->config_network_if == NULL)
++		&& (ops->config_mac_address == NULL))
+ 		return KNI_REQ_NO_REGISTER;
+ 
+ 	return KNI_REQ_REGISTERED;
+@@ -746,8 +782,8 @@ rte_kni_unregister_handlers(struct rte_kni *kni)
+ 		return -1;
+ 	}
+ 
+-	kni->ops.change_mtu = NULL;
+-	kni->ops.config_network_if = NULL;
++	memset(&kni->ops, 0, sizeof(struct rte_kni_ops));
++
+ 	return 0;
+ }
+ void
+diff --git a/lib/librte_kni/rte_kni.h b/lib/librte_kni/rte_kni.h
+index d43b5b28755b..9bdc9f301eb5 100644
+--- a/lib/librte_kni/rte_kni.h
++++ b/lib/librte_kni/rte_kni.h
+@@ -49,6 +49,7 @@
+ #include <rte_pci.h>
+ #include <rte_memory.h>
+ #include <rte_mempool.h>
++#include <rte_ether.h>
+ 
+ #include <exec-env/rte_kni_common.h>
+ 
+@@ -70,6 +71,9 @@ struct rte_kni_ops {
+ 
+ 	/* Pointer to function of configuring network interface */
+ 	int (*config_network_if)(uint16_t port_id, uint8_t if_up);
++
++	/* Pointer to function of configuring mac address */
++	int (*config_mac_address)(uint16_t port_id, uint8_t mac_addr[]);
+ };
+ 
+ /**
+@@ -90,6 +94,7 @@ struct rte_kni_conf {
+ 
+ 	__extension__
+ 	uint8_t force_bind : 1; /* Flag to bind kernel thread */
++	char mac_addr[ETHER_ADDR_LEN]; /* MAC address assigned to KNI */
+ };
+ 
+ /**
+diff --git a/test/test/test_kni.c b/test/test/test_kni.c
+index b95672755443..06448c919e5d 100644
+--- a/test/test/test_kni.c
++++ b/test/test/test_kni.c
+@@ -103,6 +103,7 @@ static const struct rte_eth_conf port_conf = {
+ static struct rte_kni_ops kni_ops = {
+ 	.change_mtu = NULL,
+ 	.config_network_if = NULL,
++	.config_mac_address = NULL,
+ };
+ 
+ static unsigned lcore_master, lcore_ingress, lcore_egress;
+@@ -260,6 +261,7 @@ test_kni_register_handler_mp(void)
+ 		struct rte_kni_ops ops = {
+ 			.change_mtu = kni_change_mtu,
+ 			.config_network_if = NULL,
++			.config_mac_address = NULL,
+ 		};
+ 
+ 		if (!kni) {
+-- 
+2.14.3
+

@@ -1,0 +1,1041 @@
+From 0361c801e1e26efc242ab6b6f9bfcf6123c6a536 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 19 Jan 2018 11:19:45 +0530
+Subject: [PATCH 098/166] PVT: dpaa2: remove DOT from nxp copyright
+
+This patch was part of SPDX changes in upstream DPDK 18.02
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa2-linuxapp-gcc             | 2 +-
+ doc/guides/cryptodevs/dpaa2_sec.rst                   | 2 +-
+ doc/guides/eventdevs/dpaa2.rst                        | 2 +-
+ doc/guides/nics/dpaa2.rst                             | 2 +-
+ drivers/bus/fslmc/Makefile                            | 2 +-
+ drivers/bus/fslmc/fslmc_bus.c                         | 2 +-
+ drivers/bus/fslmc/fslmc_logs.h                        | 2 +-
+ drivers/bus/fslmc/fslmc_vfio.c                        | 2 +-
+ drivers/bus/fslmc/fslmc_vfio.h                        | 2 +-
+ drivers/bus/fslmc/mc/dpbp.c                           | 2 +-
+ drivers/bus/fslmc/mc/dpio.c                           | 2 +-
+ drivers/bus/fslmc/mc/dpmng.c                          | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpbp.h                       | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpbp_cmd.h                   | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpcon_cmd.h                  | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpio.h                       | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpio_cmd.h                   | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpmng.h                      | 2 +-
+ drivers/bus/fslmc/mc/fsl_dpmng_cmd.h                  | 2 +-
+ drivers/bus/fslmc/mc/fsl_mc_cmd.h                     | 2 +-
+ drivers/bus/fslmc/mc/fsl_mc_sys.h                     | 2 +-
+ drivers/bus/fslmc/mc/mc_sys.c                         | 2 +-
+ drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c              | 2 +-
+ drivers/bus/fslmc/portal/dpaa2_hw_dpci.c              | 2 +-
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.c              | 2 +-
+ drivers/bus/fslmc/portal/dpaa2_hw_dpio.h              | 2 +-
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h               | 2 +-
+ drivers/bus/fslmc/qbman/include/compat.h              | 2 +-
+ drivers/bus/fslmc/rte_fslmc.h                         | 2 +-
+ drivers/crypto/dpaa2_sec/Makefile                     | 2 +-
+ drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c           | 2 +-
+ drivers/crypto/dpaa2_sec/dpaa2_sec_logs.h             | 2 +-
+ drivers/crypto/dpaa2_sec/dpaa2_sec_priv.h             | 2 +-
+ drivers/crypto/dpaa2_sec/hw/compat.h                  | 2 +-
+ drivers/crypto/dpaa2_sec/hw/desc.h                    | 2 +-
+ drivers/crypto/dpaa2_sec/hw/desc/algo.h               | 2 +-
+ drivers/crypto/dpaa2_sec/hw/desc/common.h             | 2 +-
+ drivers/crypto/dpaa2_sec/hw/desc/ipsec.h              | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta.h                     | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/fifo_load_store_cmd.h | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/header_cmd.h          | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/jump_cmd.h            | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/key_cmd.h             | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/load_cmd.h            | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/math_cmd.h            | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/move_cmd.h            | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/nfifo_cmd.h           | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h       | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/protocol_cmd.h        | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/sec_run_time_asm.h    | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/seq_in_out_ptr_cmd.h  | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/signature_cmd.h       | 2 +-
+ drivers/crypto/dpaa2_sec/hw/rta/store_cmd.h           | 2 +-
+ drivers/crypto/dpaa2_sec/mc/dpseci.c                  | 2 +-
+ drivers/crypto/dpaa2_sec/mc/fsl_dpseci.h              | 2 +-
+ drivers/crypto/dpaa2_sec/mc/fsl_dpseci_cmd.h          | 2 +-
+ drivers/event/dpaa2/Makefile                          | 2 +-
+ drivers/event/dpaa2/dpaa2_eventdev.c                  | 2 +-
+ drivers/event/dpaa2/dpaa2_eventdev.h                  | 2 +-
+ drivers/event/dpaa2/dpaa2_hw_dpcon.c                  | 2 +-
+ drivers/mempool/dpaa2/Makefile                        | 2 +-
+ drivers/mempool/dpaa2/dpaa2_hw_mempool.c              | 2 +-
+ drivers/mempool/dpaa2/dpaa2_hw_mempool.h              | 2 +-
+ drivers/net/dpaa2/Makefile                            | 2 +-
+ drivers/net/dpaa2/base/dpaa2_hw_dpni.c                | 2 +-
+ drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h          | 2 +-
+ drivers/net/dpaa2/dpaa2_ethdev.c                      | 2 +-
+ drivers/net/dpaa2/dpaa2_ethdev.h                      | 2 +-
+ drivers/net/dpaa2/dpaa2_rxtx.c                        | 2 +-
+ drivers/net/dpaa2/mc/dpni.c                           | 2 +-
+ drivers/net/dpaa2/mc/fsl_dpkg.h                       | 2 +-
+ drivers/net/dpaa2/mc/fsl_dpni.h                       | 2 +-
+ drivers/net/dpaa2/mc/fsl_dpni_cmd.h                   | 2 +-
+ mk/machine/dpaa2/rte.vars.mk                          | 2 +-
+ 74 files changed, 74 insertions(+), 74 deletions(-)
+
+diff --git a/config/defconfig_arm64-dpaa2-linuxapp-gcc b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+index 9e267343330f..409d6b447b3d 100644
+--- a/config/defconfig_arm64-dpaa2-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/doc/guides/cryptodevs/dpaa2_sec.rst b/doc/guides/cryptodevs/dpaa2_sec.rst
+index 13474c18ee27..0852215a37a6 100644
+--- a/doc/guides/cryptodevs/dpaa2_sec.rst
++++ b/doc/guides/cryptodevs/dpaa2_sec.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2016 NXP.
++    Copyright 2016 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/doc/guides/eventdevs/dpaa2.rst b/doc/guides/eventdevs/dpaa2.rst
+index 0970b266a6b1..86067efd58fe 100644
+--- a/doc/guides/eventdevs/dpaa2.rst
++++ b/doc/guides/eventdevs/dpaa2.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2017 NXP.
++    Copyright 2017 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/doc/guides/nics/dpaa2.rst b/doc/guides/nics/dpaa2.rst
+index 85bc048899e7..e4e1220cd434 100644
+--- a/doc/guides/nics/dpaa2.rst
++++ b/doc/guides/nics/dpaa2.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2016 NXP.
++    Copyright 2016 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/Makefile b/drivers/bus/fslmc/Makefile
+index 7ab39cb97db3..af1290aef882 100644
+--- a/drivers/bus/fslmc/Makefile
++++ b/drivers/bus/fslmc/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index a92b02897107..d807c8ccfa6c 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/fslmc_logs.h b/drivers/bus/fslmc/fslmc_logs.h
+index 1f7c24b38793..bc8488f462ce 100644
+--- a/drivers/bus/fslmc/fslmc_logs.h
++++ b/drivers/bus/fslmc/fslmc_logs.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/fslmc_vfio.c b/drivers/bus/fslmc/fslmc_vfio.c
+index c0709de88fcb..12922ad0a46c 100644
+--- a/drivers/bus/fslmc/fslmc_vfio.c
++++ b/drivers/bus/fslmc/fslmc_vfio.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2015-2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/fslmc_vfio.h b/drivers/bus/fslmc/fslmc_vfio.h
+index b442dc08be92..c044b40e1ed8 100644
+--- a/drivers/bus/fslmc/fslmc_vfio.h
++++ b/drivers/bus/fslmc/fslmc_vfio.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2015-2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/mc/dpbp.c b/drivers/bus/fslmc/mc/dpbp.c
+index a846245a7131..bde6c124c654 100644
+--- a/drivers/bus/fslmc/mc/dpbp.c
++++ b/drivers/bus/fslmc/mc/dpbp.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/dpio.c b/drivers/bus/fslmc/mc/dpio.c
+index 76c5d7b72f4c..50fe9a0dc80b 100644
+--- a/drivers/bus/fslmc/mc/dpio.c
++++ b/drivers/bus/fslmc/mc/dpio.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/dpmng.c b/drivers/bus/fslmc/mc/dpmng.c
+index f9946e8c0a4c..27ca4d959f1b 100644
+--- a/drivers/bus/fslmc/mc/dpmng.c
++++ b/drivers/bus/fslmc/mc/dpmng.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2015 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpbp.h b/drivers/bus/fslmc/mc/fsl_dpbp.h
+index 77ea6f27c34a..c1fc54411e8f 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpbp.h
++++ b/drivers/bus/fslmc/mc/fsl_dpbp.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpbp_cmd.h b/drivers/bus/fslmc/mc/fsl_dpbp_cmd.h
+index ce38c79b19a0..ea4ded773865 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpbp_cmd.h
++++ b/drivers/bus/fslmc/mc/fsl_dpbp_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpcon_cmd.h b/drivers/bus/fslmc/mc/fsl_dpcon_cmd.h
+index 4d0522c22018..c198720e5d1a 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpcon_cmd.h
++++ b/drivers/bus/fslmc/mc/fsl_dpcon_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpio.h b/drivers/bus/fslmc/mc/fsl_dpio.h
+index 3d96adfca944..6b7148b3625f 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpio.h
++++ b/drivers/bus/fslmc/mc/fsl_dpio.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpio_cmd.h b/drivers/bus/fslmc/mc/fsl_dpio_cmd.h
+index 3e9e1f68f865..ab15e47d0952 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpio_cmd.h
++++ b/drivers/bus/fslmc/mc/fsl_dpio_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpmng.h b/drivers/bus/fslmc/mc/fsl_dpmng.h
+index 97030e4cbe39..74612a1ffe9d 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpmng.h
++++ b/drivers/bus/fslmc/mc/fsl_dpmng.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2015 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_dpmng_cmd.h b/drivers/bus/fslmc/mc/fsl_dpmng_cmd.h
+index 4c0a6297cc99..d6ef1f691132 100644
+--- a/drivers/bus/fslmc/mc/fsl_dpmng_cmd.h
++++ b/drivers/bus/fslmc/mc/fsl_dpmng_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_mc_cmd.h b/drivers/bus/fslmc/mc/fsl_mc_cmd.h
+index 2cec29ea83c5..3ccec994e492 100644
+--- a/drivers/bus/fslmc/mc/fsl_mc_cmd.h
++++ b/drivers/bus/fslmc/mc/fsl_mc_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/fsl_mc_sys.h b/drivers/bus/fslmc/mc/fsl_mc_sys.h
+index e4b2404e8241..14836aa9ea5f 100644
+--- a/drivers/bus/fslmc/mc/fsl_mc_sys.h
++++ b/drivers/bus/fslmc/mc/fsl_mc_sys.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2015 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/mc/mc_sys.c b/drivers/bus/fslmc/mc/mc_sys.c
+index f0f9a2686e74..45bcb99a73b3 100644
+--- a/drivers/bus/fslmc/mc/mc_sys.c
++++ b/drivers/bus/fslmc/mc/mc_sys.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2015 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+index 461c1e66669f..84cb52471c5e 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpbp.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
+index ae189c72a91b..05f04bea3fe3 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpci.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+index 16f4d621c012..fc9d04eaf536 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
+index a3240b2dd4a3..d697fa1cf994 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_dpio.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index c250712734e3..bd6926dac8d1 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/fslmc/qbman/include/compat.h b/drivers/bus/fslmc/qbman/include/compat.h
+index 423087cbb7d4..1549d895ad2f 100644
+--- a/drivers/bus/fslmc/qbman/include/compat.h
++++ b/drivers/bus/fslmc/qbman/include/compat.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright (c) 2008-2016 Freescale Semiconductor, Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/fslmc/rte_fslmc.h b/drivers/bus/fslmc/rte_fslmc.h
+index 006d8c37aeab..49f8a678477b 100644
+--- a/drivers/bus/fslmc/rte_fslmc.h
++++ b/drivers/bus/fslmc/rte_fslmc.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa2_sec/Makefile b/drivers/crypto/dpaa2_sec/Makefile
+index a08f27176a0b..96706d301d5c 100644
+--- a/drivers/crypto/dpaa2_sec/Makefile
++++ b/drivers/crypto/dpaa2_sec/Makefile
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+index be2a134a5c22..09bc54fe6e7a 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_logs.h b/drivers/crypto/dpaa2_sec/dpaa2_sec_logs.h
+index b5e99f80b1db..e01b87b1e119 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_logs.h
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_logs.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_priv.h b/drivers/crypto/dpaa2_sec/dpaa2_sec_priv.h
+index 8e583803e1fd..1e054361e7aa 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_priv.h
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_priv.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa2_sec/hw/compat.h b/drivers/crypto/dpaa2_sec/hw/compat.h
+index b17b27ef8fdc..50f6037f3f9a 100644
+--- a/drivers/crypto/dpaa2_sec/hw/compat.h
++++ b/drivers/crypto/dpaa2_sec/hw/compat.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/desc.h b/drivers/crypto/dpaa2_sec/hw/desc.h
+index 0be4439c9c36..2f62c3f8c123 100644
+--- a/drivers/crypto/dpaa2_sec/hw/desc.h
++++ b/drivers/crypto/dpaa2_sec/hw/desc.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/desc/algo.h b/drivers/crypto/dpaa2_sec/hw/desc/algo.h
+index 5ae3a1ac30f1..fd55d865bed3 100644
+--- a/drivers/crypto/dpaa2_sec/hw/desc/algo.h
++++ b/drivers/crypto/dpaa2_sec/hw/desc/algo.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/desc/common.h b/drivers/crypto/dpaa2_sec/hw/desc/common.h
+index c2ac99be42d1..4c88f3195b3a 100644
+--- a/drivers/crypto/dpaa2_sec/hw/desc/common.h
++++ b/drivers/crypto/dpaa2_sec/hw/desc/common.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/desc/ipsec.h b/drivers/crypto/dpaa2_sec/hw/desc/ipsec.h
+index cc63736147d5..4b175b006b7a 100644
+--- a/drivers/crypto/dpaa2_sec/hw/desc/ipsec.h
++++ b/drivers/crypto/dpaa2_sec/hw/desc/ipsec.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta.h b/drivers/crypto/dpaa2_sec/hw/rta.h
+index 283ad600ed8a..bd82cb6d3ac0 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/fifo_load_store_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/fifo_load_store_cmd.h
+index dc0a3342ab66..308371453e21 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/fifo_load_store_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/fifo_load_store_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/header_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/header_cmd.h
+index 96c9f1e0d75e..acc25bdcbec9 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/header_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/header_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/jump_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/jump_cmd.h
+index cba65073d7e0..490467811c01 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/jump_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/jump_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/key_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/key_cmd.h
+index 8e097856e359..a70d042def14 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/key_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/key_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/load_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/load_cmd.h
+index 2e786a20c7e2..85ba4f7d2e90 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/load_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/load_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/math_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/math_cmd.h
+index 64a84b47c839..f3f1e2bfeaae 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/math_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/math_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/move_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/move_cmd.h
+index 3b9ba792daa0..1b170b908cb7 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/move_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/move_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/nfifo_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/nfifo_cmd.h
+index f1ead2dacf47..ecfd1f5ec65d 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/nfifo_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/nfifo_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+index 698ff53042c0..0a36d6f8f108 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/protocol_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/protocol_cmd.h
+index f134235a7756..1e79b55ea227 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/protocol_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/protocol_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/sec_run_time_asm.h b/drivers/crypto/dpaa2_sec/hw/rta/sec_run_time_asm.h
+index 11995aa2d814..5a23fb21c54c 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/sec_run_time_asm.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/sec_run_time_asm.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/seq_in_out_ptr_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/seq_in_out_ptr_cmd.h
+index 4aea5770b17e..b9a5a9db693b 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/seq_in_out_ptr_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/seq_in_out_ptr_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/signature_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/signature_cmd.h
+index 00597f305faf..634d4f4a4a86 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/signature_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/signature_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/store_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/store_cmd.h
+index 1b75692ed919..0eebbebb16fa 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/store_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/store_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/mc/dpseci.c b/drivers/crypto/dpaa2_sec/mc/dpseci.c
+index 2a216afc8738..9f7b7ee267be 100644
+--- a/drivers/crypto/dpaa2_sec/mc/dpseci.c
++++ b/drivers/crypto/dpaa2_sec/mc/dpseci.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/mc/fsl_dpseci.h b/drivers/crypto/dpaa2_sec/mc/fsl_dpseci.h
+index 4acb595c636e..0087576e19f5 100644
+--- a/drivers/crypto/dpaa2_sec/mc/fsl_dpseci.h
++++ b/drivers/crypto/dpaa2_sec/mc/fsl_dpseci.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/crypto/dpaa2_sec/mc/fsl_dpseci_cmd.h b/drivers/crypto/dpaa2_sec/mc/fsl_dpseci_cmd.h
+index a100a0ec58b7..8dd94d065cb0 100644
+--- a/drivers/crypto/dpaa2_sec/mc/fsl_dpseci_cmd.h
++++ b/drivers/crypto/dpaa2_sec/mc/fsl_dpseci_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/event/dpaa2/Makefile b/drivers/event/dpaa2/Makefile
+index f34eebfa24bc..9a491090b732 100644
+--- a/drivers/event/dpaa2/Makefile
++++ b/drivers/event/dpaa2/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index 60b8f6b40e60..05bea1da698c 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.h b/drivers/event/dpaa2/dpaa2_eventdev.h
+index 274335d3e8ef..40b3ce6a0674 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.h
++++ b/drivers/event/dpaa2/dpaa2_eventdev.h
+@@ -1,7 +1,7 @@
+ /*
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/event/dpaa2/dpaa2_hw_dpcon.c b/drivers/event/dpaa2/dpaa2_hw_dpcon.c
+index 4e6ca7c211ed..93a55a3b2b0c 100644
+--- a/drivers/event/dpaa2/dpaa2_hw_dpcon.c
++++ b/drivers/event/dpaa2/dpaa2_hw_dpcon.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa2/Makefile b/drivers/mempool/dpaa2/Makefile
+index dd19e1003a84..5bd7f9de38f8 100644
+--- a/drivers/mempool/dpaa2/Makefile
++++ b/drivers/mempool/dpaa2/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+index 17c7d627e7a1..123ae3b756e6 100644
+--- a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
++++ b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa2/dpaa2_hw_mempool.h b/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
+index e37dc10ee6f4..dc230cd87a9b 100644
+--- a/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
++++ b/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/Makefile b/drivers/net/dpaa2/Makefile
+index fdff976be1b0..57eb9a9aae9a 100644
+--- a/drivers/net/dpaa2/Makefile
++++ b/drivers/net/dpaa2/Makefile
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/base/dpaa2_hw_dpni.c b/drivers/net/dpaa2/base/dpaa2_hw_dpni.c
+index e3ab90ac6ad9..e6a704033b4c 100644
+--- a/drivers/net/dpaa2/base/dpaa2_hw_dpni.c
++++ b/drivers/net/dpaa2/base/dpaa2_hw_dpni.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+index 88a9d49040dd..c13336a2b3cf 100644
+--- a/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
++++ b/drivers/net/dpaa2/base/dpaa2_hw_dpni_annot.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 8051d7a36723..47fd84f021c0 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.h b/drivers/net/dpaa2/dpaa2_ethdev.h
+index 9c9ac483a26f..56869c4d97f3 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.h
++++ b/drivers/net/dpaa2/dpaa2_ethdev.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2015-2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 154457b74cb5..cae2216ac02d 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa2/mc/dpni.c b/drivers/net/dpaa2/mc/dpni.c
+index 6f671fe054d0..7d2b2733fcf8 100644
+--- a/drivers/net/dpaa2/mc/dpni.c
++++ b/drivers/net/dpaa2/mc/dpni.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016 NXP.
++ * Copyright 2016 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/net/dpaa2/mc/fsl_dpkg.h b/drivers/net/dpaa2/mc/fsl_dpkg.h
+index 7f46bafb6bcc..6723371af216 100644
+--- a/drivers/net/dpaa2/mc/fsl_dpkg.h
++++ b/drivers/net/dpaa2/mc/fsl_dpkg.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2015 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/net/dpaa2/mc/fsl_dpni.h b/drivers/net/dpaa2/mc/fsl_dpni.h
+index 5227ea155960..71b3b29d5b29 100644
+--- a/drivers/net/dpaa2/mc/fsl_dpni.h
++++ b/drivers/net/dpaa2/mc/fsl_dpni.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/net/dpaa2/mc/fsl_dpni_cmd.h b/drivers/net/dpaa2/mc/fsl_dpni_cmd.h
+index 1a483329386d..3cf553366780 100644
+--- a/drivers/net/dpaa2/mc/fsl_dpni_cmd.h
++++ b/drivers/net/dpaa2/mc/fsl_dpni_cmd.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2016-2017 NXP.
++ * Copyright 2016-2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/mk/machine/dpaa2/rte.vars.mk b/mk/machine/dpaa2/rte.vars.mk
+index 4988f7c82b50..a6a281c01194 100644
+--- a/mk/machine/dpaa2/rte.vars.mk
++++ b/mk/machine/dpaa2/rte.vars.mk
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+-- 
+2.14.3
+

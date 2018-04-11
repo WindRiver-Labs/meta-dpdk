@@ -1,0 +1,183 @@
+From 1ab489cec0021039b9b2dbd9e7285e9f53a6997f Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Tue, 16 Jan 2018 15:02:34 +0530
+Subject: [PATCH 108/166] PVT: net/dpaa2: add no Prefetch based Rx dequeue mode
+
+This allow the rx call with different set of nb_pkts in each call.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa2/dpaa2_ethdev.c |   8 ++-
+ drivers/net/dpaa2/dpaa2_ethdev.h |   1 +
+ drivers/net/dpaa2/dpaa2_rxtx.c   | 102 +++++++++++++++++++++++++++++++++++++++
+ nxp/README                       |   3 ++
+ 4 files changed, 113 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 47fd84f021c0..e3b5e21bce45 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -672,7 +672,8 @@ dpaa2_supported_ptypes_get(struct rte_eth_dev *dev)
+ 		RTE_PTYPE_UNKNOWN
+ 	};
+ 
+-	if (dev->rx_pkt_burst == dpaa2_dev_prefetch_rx)
++	if (dev->rx_pkt_burst == dpaa2_dev_rx ||
++		dev->rx_pkt_burst == dpaa2_dev_prefetch_rx)
+ 		return ptypes;
+ 	return NULL;
+ }
+@@ -1961,6 +1962,11 @@ dpaa2_dev_init(struct rte_eth_dev *eth_dev)
+ 	eth_dev->tx_pkt_burst = dpaa2_dev_tx;
+ 	rte_fslmc_vfio_dmamap();
+ 
++	/* If no prefetch is configured. */
++	if (getenv("DPAA2_NO_PREFETCH_RX")) {
++		eth_dev->rx_pkt_burst = dpaa2_dev_rx;
++		PMD_INIT_LOG(INFO, "No Prefetch RX Mode enabled");
++	}
+ 	RTE_LOG(INFO, PMD, "%s: netdev created\n", eth_dev->data->name);
+ 	return 0;
+ init_err:
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.h b/drivers/net/dpaa2/dpaa2_ethdev.h
+index 56869c4d97f3..16288e0642a5 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.h
++++ b/drivers/net/dpaa2/dpaa2_ethdev.h
+@@ -140,6 +140,7 @@ int dpaa2_eth_eventq_attach(const struct rte_eth_dev *dev,
+ int dpaa2_eth_eventq_detach(const struct rte_eth_dev *dev,
+ 		int eth_rx_queue_id);
+ 
++uint16_t dpaa2_dev_rx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts);
+ uint16_t dpaa2_dev_prefetch_rx(void *queue, struct rte_mbuf **bufs,
+ 			       uint16_t nb_pkts);
+ void dpaa2_dev_process_parallel_event(struct qbman_swp *swp,
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index cae2216ac02d..4f0ee266c006 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -688,6 +688,108 @@ dpaa2_dev_process_atomic_event(struct qbman_swp *swp __attribute__((unused)),
+ 	DPAA2_PER_LCORE_DQRR_MBUF(dqrr_index) = ev->mbuf;
+ }
+ 
++uint16_t
++dpaa2_dev_rx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
++{
++	/* Function receive frames for a given device and VQ*/
++	struct dpaa2_queue *dpaa2_q = (struct dpaa2_queue *)queue;
++	struct qbman_result *dq_storage;
++	uint32_t fqid = dpaa2_q->fqid;
++	int ret, num_rx = 0, next_pull = nb_pkts, num_pulled;
++	uint8_t pending, status;
++	struct qbman_swp *swp;
++	const struct qbman_fd *fd, *next_fd;
++	struct qbman_pull_desc pulldesc;
++	struct rte_eth_dev *dev = dpaa2_q->dev;
++
++	if (unlikely(!DPAA2_PER_LCORE_DPIO)) {
++		ret = dpaa2_affine_qbman_swp();
++		if (ret) {
++			RTE_LOG(ERR, PMD, "Failure in affining portal\n");
++			return 0;
++		}
++	}
++	swp = DPAA2_PER_LCORE_PORTAL;
++
++	do {
++		dq_storage = dpaa2_q->q_storage->dq_storage[0];
++		qbman_pull_desc_clear(&pulldesc);
++		qbman_pull_desc_set_fq(&pulldesc, fqid);
++		qbman_pull_desc_set_storage(&pulldesc, dq_storage,
++				(dma_addr_t)(DPAA2_VADDR_TO_IOVA(dq_storage)), 1);
++
++		if (next_pull > DPAA2_DQRR_RING_SIZE) {
++			qbman_pull_desc_set_numframes(&pulldesc,
++				DPAA2_DQRR_RING_SIZE);
++			next_pull -= DPAA2_DQRR_RING_SIZE;
++		} else {
++			qbman_pull_desc_set_numframes(&pulldesc, next_pull);
++			next_pull = 0;
++		}
++
++		while (1) {
++			if (qbman_swp_pull(swp, &pulldesc)) {
++				PMD_RX_LOG(WARNING, "VDQ command is not issued."
++					   "QBMAN is busy\n");
++				/* Portal was busy, try again */
++				continue;
++			}
++			break;
++		}
++
++		rte_prefetch0((void *)((uint64_t)(dq_storage + 1)));
++		/* Check if the previous issued command is completed. */
++		while (!qbman_check_command_complete(dq_storage))
++			;
++
++		num_pulled = 0;
++		pending = 1;
++		do {
++			/* Loop until the dq_storage is updated with
++			 * new token by QBMAN
++			 */
++			while (!qbman_check_new_result(dq_storage))
++				;
++			rte_prefetch0((void *)((uint64_t)(dq_storage + 2)));
++			/* Check whether Last Pull command is Expired and
++			 * setting Condition for Loop termination
++			 */
++			if (qbman_result_DQ_is_pull_complete(dq_storage)) {
++				pending = 0;
++				/* Check for valid frame. */
++				status = qbman_result_DQ_flags(dq_storage);
++				if (unlikely((status &
++					QBMAN_DQ_STAT_VALIDFRAME) == 0))
++					continue;
++			}
++			fd = qbman_result_DQ_fd(dq_storage);
++
++			next_fd = qbman_result_DQ_fd(dq_storage + 1);
++			/* Prefetch Annotation address for the parse results */
++			rte_prefetch0((void *)(DPAA2_GET_FD_ADDR(next_fd)
++					+ DPAA2_FD_PTA_SIZE + 16));
++
++			if (unlikely(DPAA2_FD_GET_FORMAT(fd) == qbman_fd_sg))
++				bufs[num_rx] = eth_sg_fd_to_mbuf(fd);
++			else
++				bufs[num_rx] = eth_fd_to_mbuf(fd);
++			bufs[num_rx]->port = dev->data->port_id;
++
++			if (dev->data->dev_conf.rxmode.hw_vlan_strip)
++				rte_vlan_strip(bufs[num_rx]);
++
++			dq_storage++;
++			num_rx++;
++			num_pulled++;
++		} while (pending);
++	/* Last VDQ provided all packets and more packets are requested */
++	} while (next_pull && num_pulled == DPAA2_DQRR_RING_SIZE);
++
++	dpaa2_q->rx_pkts += num_rx;
++
++	return num_rx;
++}
++
+ /*
+  * Callback to handle sending packets through WRIOP based interface
+  */
+diff --git a/nxp/README b/nxp/README
+index 264aaf44e79c..d86177de0ecb 100644
+--- a/nxp/README
++++ b/nxp/README
+@@ -605,6 +605,9 @@ DPAA2:
+ 
+ 6. DPAA2_HOST_START_CPU		Define the CPU id for the virtual m/c CPU - so that right
+ 				QMAN HW stashing can be configured.
++
++7. DPAA2_NO_PREFETCH_RX		Disable prefetch RX mode - better latency and allows different
++				size of pull request in each call.
+ ================================================================================
+ 
+ Minimum NXP LSDK version supported: LSDK 1709 (https://lsdk.github.io/)
+-- 
+2.14.3
+

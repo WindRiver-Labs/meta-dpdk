@@ -1,0 +1,51 @@
+From e9cf7a35d4f2027074b1f295fd1e67a307d744d0 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 6 Nov 2017 02:40:40 +0530
+Subject: [PATCH 022/166] bus/dpaa: optimize the qman HW stashing settings
+
+The settings are tuned for performance.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index b8511103c3ae..c0862c96f2d6 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -40,6 +40,7 @@
+ 
+ #include "qman.h"
+ #include <rte_branch_prediction.h>
++#include <rte_dpaa_bus.h>
+ 
+ /* Compilation constants */
+ #define DQRR_MAXFILL	15
+@@ -536,7 +537,12 @@ struct qman_portal *qman_create_portal(
+ 
+ 	p = &portal->p;
+ 
+-	portal->use_eqcr_ci_stashing = ((qman_ip_rev >= QMAN_REV30) ? 1 : 0);
++	if (dpaa_svr_family == SVR_LS1043A_FAMILY)
++		portal->use_eqcr_ci_stashing = 3;
++	else
++		portal->use_eqcr_ci_stashing =
++					((qman_ip_rev >= QMAN_REV30) ? 1 : 0);
++
+ 	/*
+ 	 * prep the low-level portal struct with the mapped addresses from the
+ 	 * config, everything that follows depends on it and "config" is more
+@@ -549,7 +555,7 @@ struct qman_portal *qman_create_portal(
+ 	 * and stash with high-than-DQRR priority.
+ 	 */
+ 	if (qm_eqcr_init(p, qm_eqcr_pvb,
+-			 portal->use_eqcr_ci_stashing ? 3 : 0, 1)) {
++			 portal->use_eqcr_ci_stashing, 1)) {
+ 		pr_err("Qman EQCR initialisation failed\n");
+ 		goto fail_eqcr;
+ 	}
+-- 
+2.14.3
+

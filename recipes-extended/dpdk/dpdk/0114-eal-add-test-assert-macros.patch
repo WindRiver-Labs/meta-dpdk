@@ -1,0 +1,186 @@
+From 26cd583d8bd4115ec848dc5f4a1e6cf2599c551a Mon Sep 17 00:00:00 2001
+From: Pavan Nikhilesh <pbhagavatula@caviumnetworks.com>
+Date: Wed, 24 Jan 2018 09:25:30 +0530
+Subject: [PATCH 114/166] eal: add test assert macros
+
+Adding common test assertion macros for unit testing.
+Replaced common macros in test/test.h with new RTE_TEST_ASSERT_* macros.
+
+Signed-off-by: Pavan Nikhilesh <pbhagavatula@caviumnetworks.com>
+Acked-by: Jerin Jacob <jerin.jacob@caviumnetworks.com>
+Acked-by: Thomas Monjalon <thomas@monjalon.net>
+---
+ lib/librte_eal/common/Makefile           |  2 +-
+ lib/librte_eal/common/include/rte_test.h | 46 +++++++++++++++++++++
+ test/test/test.h                         | 70 +++++---------------------------
+ 3 files changed, 58 insertions(+), 60 deletions(-)
+ create mode 100644 lib/librte_eal/common/include/rte_test.h
+
+diff --git a/lib/librte_eal/common/Makefile b/lib/librte_eal/common/Makefile
+index 9effd0d45249..eba1059f262d 100644
+--- a/lib/librte_eal/common/Makefile
++++ b/lib/librte_eal/common/Makefile
+@@ -43,7 +43,7 @@ INC += rte_hexdump.h rte_devargs.h rte_bus.h rte_dev.h
+ INC += rte_pci_dev_feature_defs.h rte_pci_dev_features.h
+ INC += rte_malloc.h rte_keepalive.h rte_time.h
+ INC += rte_service.h rte_service_component.h
+-INC += rte_bitmap.h rte_vfio.h
++INC += rte_bitmap.h rte_vfio.h rte_test.h
+ 
+ GENERIC_INC := rte_atomic.h rte_byteorder.h rte_cycles.h rte_prefetch.h
+ GENERIC_INC += rte_spinlock.h rte_memcpy.h rte_cpuflags.h rte_rwlock.h
+diff --git a/lib/librte_eal/common/include/rte_test.h b/lib/librte_eal/common/include/rte_test.h
+new file mode 100644
+index 000000000000..89e47f47a5e0
+--- /dev/null
++++ b/lib/librte_eal/common/include/rte_test.h
+@@ -0,0 +1,46 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright(c) 2015 Cavium, Inc
++ */
++
++#ifndef _RTE_TEST_H_
++#define _RTE_TEST_H_
++
++#include <rte_log.h>
++
++/* Before including rte_test.h file you can define
++ * RTE_TEST_TRACE_FAILURE(_file, _line, _func) macro to better trace/debug test
++ * failures. Mostly useful in development phase.
++ */
++#ifndef RTE_TEST_TRACE_FAILURE
++#define RTE_TEST_TRACE_FAILURE(_file, _line, _func)
++#endif
++
++
++#define RTE_TEST_ASSERT(cond, msg, ...) do {                                  \
++	if (!(cond)) {                                                        \
++		RTE_LOG(DEBUG, EAL, "Test assert %s line %d failed: "         \
++				msg "\n", __func__, __LINE__, ##__VA_ARGS__); \
++		RTE_TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);         \
++		return -1;                                                    \
++	}                                                                     \
++} while (0)
++
++#define RTE_TEST_ASSERT_EQUAL(a, b, msg, ...) \
++	RTE_TEST_ASSERT(a == b, msg, ##__VA_ARGS__)
++
++#define RTE_TEST_ASSERT_NOT_EQUAL(a, b, msg, ...) \
++	RTE_TEST_ASSERT(a != b, msg, ##__VA_ARGS__)
++
++#define RTE_TEST_ASSERT_SUCCESS(val, msg, ...) \
++	RTE_TEST_ASSERT(val == 0, msg, ##__VA_ARGS__)
++
++#define RTE_TEST_ASSERT_FAIL(val, msg, ...) \
++	RTE_TEST_ASSERT(val != 0, msg, ##__VA_ARGS__)
++
++#define RTE_TEST_ASSERT_NULL(val, msg, ...) \
++	RTE_TEST_ASSERT(val == NULL, msg, ##__VA_ARGS__)
++
++#define RTE_TEST_ASSERT_NOT_NULL(val, msg, ...) \
++	RTE_TEST_ASSERT(val != NULL, msg, ##__VA_ARGS__)
++
++#endif /* _RTE_TEST_H_ */
+diff --git a/test/test/test.h b/test/test/test.h
+index 08ffe949c470..0ea18586c498 100644
+--- a/test/test/test.h
++++ b/test/test/test.h
+@@ -38,7 +38,6 @@
+ #include <sys/queue.h>
+ 
+ #include <rte_common.h>
+-#include <rte_log.h>
+ 
+ #define TEST_SUCCESS  (0)
+ #define TEST_FAILED  (-1)
+@@ -50,23 +49,13 @@
+ # define TEST_TRACE_FAILURE(_file, _line, _func)
+ #endif
+ 
+-#define TEST_ASSERT(cond, msg, ...) do {                         \
+-		if (!(cond)) {                                           \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define RTE_TEST_TRACE_FAILURE TEST_TRACE_FAILURE
+ 
+-#define TEST_ASSERT_EQUAL(a, b, msg, ...) do {                   \
+-		if (!(a == b)) {                                         \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#include <rte_test.h>
++
++#define TEST_ASSERT RTE_TEST_ASSERT
++
++#define TEST_ASSERT_EQUAL RTE_TEST_ASSERT_EQUAL
+ 
+ /* Compare two buffers (length in bytes) */
+ #define TEST_ASSERT_BUFFERS_ARE_EQUAL(a, b, len,  msg, ...) do {	\
+@@ -134,52 +123,15 @@
+ 	}                                                                     \
+ } while (0)
+ 
+-#define TEST_ASSERT_NOT_EQUAL(a, b, msg, ...) do {               \
+-		if (!(a != b)) {                                         \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define TEST_ASSERT_NOT_EQUAL RTE_TEST_ASSERT_NOT_EQUAL
+ 
+-#define TEST_ASSERT_SUCCESS(val, msg, ...) do {                  \
+-		typeof(val) _val = (val);                                \
+-		if (!(_val == 0)) {                                      \
+-			printf("TestCase %s() line %d failed (err %d): "     \
+-				msg "\n", __func__, __LINE__, _val,              \
+-				##__VA_ARGS__);                                  \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define TEST_ASSERT_SUCCESS RTE_TEST_ASSERT_SUCCESS
+ 
+-#define TEST_ASSERT_FAIL(val, msg, ...) do {                     \
+-		if (!(val != 0)) {                                       \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define TEST_ASSERT_FAIL RTE_TEST_ASSERT_FAIL
+ 
+-#define TEST_ASSERT_NULL(val, msg, ...) do {                     \
+-		if (!(val == NULL)) {                                    \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define TEST_ASSERT_NULL RTE_TEST_ASSERT_NULL
+ 
+-#define TEST_ASSERT_NOT_NULL(val, msg, ...) do {                 \
+-		if (!(val != NULL)) {                                    \
+-			printf("TestCase %s() line %d failed: "              \
+-				msg "\n", __func__, __LINE__, ##__VA_ARGS__);    \
+-			TEST_TRACE_FAILURE(__FILE__, __LINE__, __func__);    \
+-			return TEST_FAILED;                                  \
+-		}                                                        \
+-} while (0)
++#define TEST_ASSERT_NOT_NULL RTE_TEST_ASSERT_NOT_NULL
+ 
+ struct unit_test_case {
+ 	int (*setup)(void);
+-- 
+2.14.3
+

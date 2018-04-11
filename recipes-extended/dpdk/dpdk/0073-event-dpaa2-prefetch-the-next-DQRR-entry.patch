@@ -1,0 +1,28 @@
+From 9f90bd96c775567c56395b44630504b979940b3c Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 19:07:05 +0530
+Subject: [PATCH 073/166] event/dpaa2: prefetch the next DQRR entry
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/event/dpaa2/dpaa2_eventdev.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index 3b82f02cdc08..60b8f6b40e60 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -281,9 +281,9 @@ dpaa2_eventdev_dequeue_burst(void *port, struct rte_event ev[],
+ 			}
+ 			return num_pkts;
+ 		}
++		qbman_swp_prefetch_dqrr_next(swp);
+ 
+ 		fd = qbman_result_DQ_fd(dq);
+-
+ 		rxq = (struct dpaa2_queue *)qbman_result_DQ_fqd_ctx(dq);
+ 		if (rxq) {
+ 			rxq->cb(swp, fd, dq, rxq, &ev[num_pkts]);
+-- 
+2.14.3
+

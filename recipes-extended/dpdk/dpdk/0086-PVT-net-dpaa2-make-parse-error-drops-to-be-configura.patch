@@ -1,0 +1,57 @@
+From a23f247118720c4a2a2dc4832261961411083fb4 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 12 Jan 2018 15:13:44 +0530
+Subject: [PATCH 086/166] PVT: net/dpaa2: make parse error drops to be
+ configurable
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa2/dpaa2_ethdev.c | 10 ++++++++++
+ drivers/net/dpaa2/dpaa2_ethdev.h |  3 +++
+ 2 files changed, 13 insertions(+)
+
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 37e875a2c43f..fad8ae48fc0e 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -808,6 +808,10 @@ dpaa2_dev_start(struct rte_eth_dev *dev)
+ 	/*checksum errors, send them to normal path and set it in annotation */
+ 	err_cfg.errors = DPNI_ERROR_L3CE | DPNI_ERROR_L4CE;
+ 
++	/* if packet with parse error are not to be dropped */
++	if (!(priv->flags & DPAA2_PARSE_ERR_DROP))
++		err_cfg.errors |= DPNI_ERROR_PHE;
++
+ 	err_cfg.error_action = DPNI_ERROR_ACTION_CONTINUE;
+ 	err_cfg.set_frame_annotation = true;
+ 
+@@ -1888,6 +1892,12 @@ dpaa2_dev_init(struct rte_eth_dev *eth_dev)
+ 
+ 	PMD_INIT_LOG(DEBUG, "RX tail drop is %u bytes", td_threshold);
+ 
++	/* Packets with parse error to be dropped in hw */
++	if (getenv("DPAA2_PARSE_ERR_DROP")) {
++		priv->flags |= DPAA2_PARSE_ERR_DROP;
++		PMD_INIT_LOG(INFO, "Drop parse error packets in hw");
++	}
++
+ 	/* Allocate memory for hardware structure for queues */
+ 	ret = dpaa2_alloc_rx_tx_queues(eth_dev);
+ 	if (ret) {
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.h b/drivers/net/dpaa2/dpaa2_ethdev.h
+index 6546f22fdb85..9c9ac483a26f 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.h
++++ b/drivers/net/dpaa2/dpaa2_ethdev.h
+@@ -73,6 +73,9 @@
+  */
+ #define DPAA2_TX_CGR_OFF	0x01
+ 
++/* Drop packets with parsing error in hw */
++#define DPAA2_PARSE_ERR_DROP	0x02
++
+ /* Disable RX tail drop, default is enable */
+ #define DPAA2_RX_TAILDROP_OFF	0x04
+ 
+-- 
+2.14.3
+

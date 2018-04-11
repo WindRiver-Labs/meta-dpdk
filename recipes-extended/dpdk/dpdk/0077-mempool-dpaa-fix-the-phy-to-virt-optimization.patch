@@ -1,0 +1,59 @@
+From 2b7d076d6ded6a517cd23871730e4515d7d406f3 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Tue, 23 Jan 2018 17:57:03 +0530
+Subject: [PATCH 077/166] mempool/dpaa: fix the phy to virt optimization
+
+Fixes: 83a4f267f2e3 ("mempool/dpaa: optimize phy to virt conversion")
+Cc: stable@dpdk.org
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/mempool/dpaa/dpaa_mempool.c | 9 ++++-----
+ drivers/mempool/dpaa/dpaa_mempool.h | 4 ++--
+ 2 files changed, 6 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.c b/drivers/mempool/dpaa/dpaa_mempool.c
+index 96e63217c017..658e05c7d5ba 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.c
++++ b/drivers/mempool/dpaa/dpaa_mempool.c
+@@ -176,8 +176,8 @@ dpaa_mbuf_free_bulk(struct rte_mempool *pool,
+ 		uint64_t phy = rte_mempool_virt2iova(obj_table[i]);
+ 
+ 		if (unlikely(!bp_info->ptov_off)) {
+-			/* buffers are not from multiple memzones */
+-			if (!(bp_info->flags & DPAA_MPOOL_MULTI_MEMZONE)) {
++			/* buffers are from single mem segment */
++			if (bp_info->flags & DPAA_MPOOL_SINGLE_SEGMENT) {
+ 				bp_info->ptov_off
+ 						= (uint64_t)obj_table[i] - phy;
+ 				rte_dpaa_bpid_info[bp_info->bpid].ptov_off
+@@ -308,9 +308,8 @@ dpaa_register_memory_area(const struct rte_mempool *mp,
+ 			   len, total_elt_sz * mp->size);
+ 
+ 	/* Detect pool area has sufficient space for elements in this memzone */
+-	if (len < total_elt_sz * mp->size)
+-		/* Else, Memory will be allocated from multiple memzones */
+-		bp_info->flags |= DPAA_MPOOL_MULTI_MEMZONE;
++	if (len >= total_elt_sz * mp->size)
++		bp_info->flags |= DPAA_MPOOL_SINGLE_SEGMENT;
+ 
+ 	return 0;
+ }
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.h b/drivers/mempool/dpaa/dpaa_mempool.h
+index 4bd6b709f3ab..513ffdc9189b 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.h
++++ b/drivers/mempool/dpaa/dpaa_mempool.h
+@@ -54,8 +54,8 @@
+ /* Maximum release/acquire from BMAN */
+ #define DPAA_MBUF_MAX_ACQ_REL  8
+ 
+-/* Buffers are allocated from multiple memzones i.e. non phys contiguous */
+-#define DPAA_MPOOL_MULTI_MEMZONE  0x01
++/* Buffers are allocated from single mem segment i.e. phys contiguous */
++#define DPAA_MPOOL_SINGLE_SEGMENT  0x01
+ 
+ struct dpaa_bp_info {
+ 	struct rte_mempool *mp;
+-- 
+2.14.3
+

@@ -1,0 +1,222 @@
+From 93097d8b221d02e6bb6fc1589c38a8b9f072740f Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 17:57:06 +0530
+Subject: [PATCH 080/166] bus/dpaa: check portal presence in the caller API
+
+In the I/O path we were calling rte_dpaa_portal_init which
+internally checks if a portal is affined to the core.
+But this lead to calling of that non-static API in every call.
+
+Instead check the portal affinity in the caller itself for
+performance reasons
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/dpaa/dpaa_bus.c               | 26 ++++++--------------------
+ drivers/bus/dpaa/rte_bus_dpaa_version.map |  1 +
+ drivers/bus/dpaa/rte_dpaa_bus.h           |  2 ++
+ drivers/mempool/dpaa/dpaa_mempool.c       | 24 ++++++++++++++----------
+ drivers/net/dpaa/dpaa_ethdev.c            | 10 ++++++----
+ drivers/net/dpaa/dpaa_rxtx.c              | 20 ++++++++++++--------
+ 6 files changed, 41 insertions(+), 42 deletions(-)
+
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index ef136b7ac18b..a7e597ea9ee4 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -80,7 +80,7 @@ pthread_key_t dpaa_portal_key;
+ 
+ unsigned int dpaa_svr_family;
+ 
+-RTE_DEFINE_PER_LCORE(bool, _dpaa_io);
++RTE_DEFINE_PER_LCORE(bool, dpaa_io);
+ RTE_DEFINE_PER_LCORE(struct dpaa_portal_dqrr, held_bufs);
+ 
+ static int
+@@ -256,9 +256,7 @@ dpaa_clean_device_list(void)
+ 	}
+ }
+ 
+-/** XXX move this function into a separate file */
+-static int
+-_dpaa_portal_init(void *arg)
++int rte_dpaa_portal_init(void *arg)
+ {
+ 	cpu_set_t cpuset;
+ 	pthread_t id;
+@@ -329,25 +327,13 @@ _dpaa_portal_init(void *arg)
+ 		return ret;
+ 	}
+ 
+-	RTE_PER_LCORE(_dpaa_io) = true;
++	RTE_PER_LCORE(dpaa_io) = true;
+ 
+ 	DPAA_BUS_LOG(DEBUG, "QMAN thread initialized");
+ 
+ 	return 0;
+ }
+ 
+-/*
+- * rte_dpaa_portal_init - Wrapper over _dpaa_portal_init with thread level check
+- * XXX Complete this
+- */
+-int rte_dpaa_portal_init(void *arg)
+-{
+-	if (unlikely(!RTE_PER_LCORE(_dpaa_io)))
+-		return _dpaa_portal_init(arg);
+-
+-	return 0;
+-}
+-
+ int
+ rte_dpaa_portal_fq_init(void *arg, struct qman_fq *fq)
+ {
+@@ -355,8 +341,8 @@ rte_dpaa_portal_fq_init(void *arg, struct qman_fq *fq)
+ 	u32 sdqcr;
+ 	struct qman_portal *qp;
+ 
+-	if (unlikely(!RTE_PER_LCORE(_dpaa_io)))
+-		_dpaa_portal_init(arg);
++	if (unlikely(!RTE_PER_LCORE(dpaa_io)))
++		rte_dpaa_portal_init(arg);
+ 
+ 	/* Initialise qman specific portals */
+ 	qp = fsl_qman_portal_create();
+@@ -394,7 +380,7 @@ dpaa_portal_finish(void *arg)
+ 	rte_free(dpaa_io_portal);
+ 	dpaa_io_portal = NULL;
+ 
+-	RTE_PER_LCORE(_dpaa_io) = false;
++	RTE_PER_LCORE(dpaa_io) = false;
+ }
+ 
+ #define DPAA_DEV_PATH1 "/sys/devices/platform/soc/soc:fsl,dpaa"
+diff --git a/drivers/bus/dpaa/rte_bus_dpaa_version.map b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+index 925cf91881ed..8d90285436c5 100644
+--- a/drivers/bus/dpaa/rte_bus_dpaa_version.map
++++ b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+@@ -70,6 +70,7 @@ DPDK_18.02 {
+ 
+ 	dpaa_logtype_eventdev;
+ 	dpaa_svr_family;
++	per_lcore_dpaa_io;
+ 	per_lcore_held_bufs;
+ 	qm_channel_pool1;
+ 	qman_alloc_cgrid_range;
+diff --git a/drivers/bus/dpaa/rte_dpaa_bus.h b/drivers/bus/dpaa/rte_dpaa_bus.h
+index 568b5fe17d5a..c91c3a75a482 100644
+--- a/drivers/bus/dpaa/rte_dpaa_bus.h
++++ b/drivers/bus/dpaa/rte_dpaa_bus.h
+@@ -57,6 +57,8 @@
+ 
+ extern unsigned int dpaa_svr_family;
+ 
++extern RTE_DEFINE_PER_LCORE(bool, dpaa_io);
++
+ struct rte_dpaa_device;
+ struct rte_dpaa_driver;
+ 
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.c b/drivers/mempool/dpaa/dpaa_mempool.c
+index 658e05c7d5ba..9d6a5a04fbbd 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.c
++++ b/drivers/mempool/dpaa/dpaa_mempool.c
+@@ -165,11 +165,13 @@ dpaa_mbuf_free_bulk(struct rte_mempool *pool,
+ 	DPAA_MEMPOOL_DPDEBUG("Request to free %d buffers in bpid = %d",
+ 			     n, bp_info->bpid);
+ 
+-	ret = rte_dpaa_portal_init((void *)0);
+-	if (ret) {
+-		DPAA_MEMPOOL_ERR("rte_dpaa_portal_init failed with ret: %d",
+-				 ret);
+-		return 0;
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_MEMPOOL_ERR("rte_dpaa_portal_init failed with ret: %d",
++					 ret);
++			return 0;
++		}
+ 	}
+ 
+ 	while (i < n) {
+@@ -219,11 +221,13 @@ dpaa_mbuf_alloc_bulk(struct rte_mempool *pool,
+ 		return -1;
+ 	}
+ 
+-	ret = rte_dpaa_portal_init((void *)0);
+-	if (ret) {
+-		DPAA_MEMPOOL_ERR("rte_dpaa_portal_init failed with ret: %d",
+-				 ret);
+-		return -1;
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_MEMPOOL_ERR("rte_dpaa_portal_init failed with ret: %d",
++					 ret);
++			return -1;
++		}
+ 	}
+ 
+ 	while (n < count) {
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index 6603a7a4c7f2..81fbf56264fd 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -1351,10 +1351,12 @@ rte_dpaa_probe(struct rte_dpaa_driver *dpaa_drv,
+ 		is_global_init = 1;
+ 	}
+ 
+-	ret = rte_dpaa_portal_init((void *)1);
+-	if (ret) {
+-		DPAA_PMD_ERR("Unable to initialize portal");
+-		return ret;
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)1);
++		if (ret) {
++			DPAA_PMD_ERR("Unable to initialize portal");
++			return ret;
++		}
+ 	}
+ 
+ 	eth_dev = rte_eth_dev_allocate(dpaa_dev->name);
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index de342352392a..df2c5092beaf 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -529,10 +529,12 @@ uint16_t dpaa_eth_queue_rx(void *q,
+ 	if (likely(fq->is_static))
+ 		return dpaa_eth_queue_portal_rx(fq, bufs, nb_bufs);
+ 
+-	ret = rte_dpaa_portal_init((void *)0);
+-	if (ret) {
+-		DPAA_PMD_ERR("Failure in affining portal");
+-		return 0;
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal");
++			return 0;
++		}
+ 	}
+ 
+ 	ret = qman_set_vdq(fq, (nb_bufs > DPAA_MAX_DEQUEUE_NUM_FRAMES) ?
+@@ -803,10 +805,12 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 	int ret;
+ 	uint32_t seqn, index, flags[DPAA_TX_BURST_SIZE] = {0};
+ 
+-	ret = rte_dpaa_portal_init((void *)0);
+-	if (ret) {
+-		DPAA_PMD_ERR("Failure in affining portal");
+-		return 0;
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal");
++			return 0;
++		}
+ 	}
+ 
+ 	DPAA_DP_LOG(DEBUG, "Transmitting %d buffers on queue: %p", nb_bufs, q);
+-- 
+2.14.3
+

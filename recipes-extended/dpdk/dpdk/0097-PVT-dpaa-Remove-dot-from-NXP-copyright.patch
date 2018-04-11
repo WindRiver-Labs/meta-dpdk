@@ -1,0 +1,567 @@
+From 7a7126147dbcb5ff65f2946c53dac3a47bed1206 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 19 Jan 2018 11:11:34 +0530
+Subject: [PATCH 097/166] PVT: dpaa: Remove dot from NXP copyright
+
+This patch was part of SPDX changes in DPDK upstream 18.02
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa-linuxapp-gcc  | 2 +-
+ doc/guides/cryptodevs/dpaa_sec.rst        | 2 +-
+ doc/guides/nics/dpaa.rst                  | 2 +-
+ drivers/bus/dpaa/Makefile                 | 2 +-
+ drivers/bus/dpaa/base/fman/fman.c         | 2 +-
+ drivers/bus/dpaa/base/fman/fman_hw.c      | 2 +-
+ drivers/bus/dpaa/base/fman/netcfg_layer.c | 2 +-
+ drivers/bus/dpaa/base/fman/of.c           | 2 +-
+ drivers/bus/dpaa/base/qbman/bman.c        | 2 +-
+ drivers/bus/dpaa/base/qbman/bman.h        | 2 +-
+ drivers/bus/dpaa/base/qbman/bman_driver.c | 2 +-
+ drivers/bus/dpaa/base/qbman/bman_priv.h   | 2 +-
+ drivers/bus/dpaa/base/qbman/dpaa_alloc.c  | 2 +-
+ drivers/bus/dpaa/base/qbman/dpaa_sys.c    | 2 +-
+ drivers/bus/dpaa/base/qbman/dpaa_sys.h    | 2 +-
+ drivers/bus/dpaa/base/qbman/process.c     | 2 +-
+ drivers/bus/dpaa/base/qbman/qman.c        | 2 +-
+ drivers/bus/dpaa/base/qbman/qman.h        | 2 +-
+ drivers/bus/dpaa/base/qbman/qman_driver.c | 2 +-
+ drivers/bus/dpaa/base/qbman/qman_priv.h   | 2 +-
+ drivers/bus/dpaa/dpaa_bus.c               | 2 +-
+ drivers/bus/dpaa/include/dpaa_bits.h      | 2 +-
+ drivers/bus/dpaa/include/dpaa_list.h      | 2 +-
+ drivers/bus/dpaa/include/dpaa_rbtree.h    | 2 +-
+ drivers/bus/dpaa/include/fsl_fman.h       | 2 +-
+ drivers/bus/dpaa/include/of.h             | 2 +-
+ drivers/bus/dpaa/rte_dpaa_bus.h           | 2 +-
+ drivers/bus/dpaa/rte_dpaa_logs.h          | 2 +-
+ drivers/crypto/dpaa_sec/Makefile          | 2 +-
+ drivers/crypto/dpaa_sec/dpaa_sec.c        | 2 +-
+ drivers/crypto/dpaa_sec/dpaa_sec.h        | 2 +-
+ drivers/mempool/dpaa/Makefile             | 2 +-
+ drivers/mempool/dpaa/dpaa_mempool.c       | 2 +-
+ drivers/mempool/dpaa/dpaa_mempool.h       | 2 +-
+ drivers/net/dpaa/Makefile                 | 2 +-
+ drivers/net/dpaa/dpaa_ethdev.c            | 2 +-
+ drivers/net/dpaa/dpaa_ethdev.h            | 2 +-
+ drivers/net/dpaa/dpaa_rxtx.c              | 2 +-
+ drivers/net/dpaa/dpaa_rxtx.h              | 2 +-
+ mk/machine/dpaa/rte.vars.mk               | 2 +-
+ 40 files changed, 40 insertions(+), 40 deletions(-)
+
+diff --git a/config/defconfig_arm64-dpaa-linuxapp-gcc b/config/defconfig_arm64-dpaa-linuxapp-gcc
+index 64807ddf5a79..8d05f85cbb89 100644
+--- a/config/defconfig_arm64-dpaa-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa-linuxapp-gcc
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright 2016 Freescale Semiconductor, Inc.
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/doc/guides/cryptodevs/dpaa_sec.rst b/doc/guides/cryptodevs/dpaa_sec.rst
+index d3438cc306c2..ae6961b9503c 100644
+--- a/doc/guides/cryptodevs/dpaa_sec.rst
++++ b/doc/guides/cryptodevs/dpaa_sec.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2017 NXP.
++    Copyright 2017 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/doc/guides/nics/dpaa.rst b/doc/guides/nics/dpaa.rst
+index 1d93b3c4b3a3..53ec61f2a21f 100644
+--- a/doc/guides/nics/dpaa.rst
++++ b/doc/guides/nics/dpaa.rst
+@@ -1,5 +1,5 @@
+ ..  BSD LICENSE
+-    Copyright 2017 NXP.
++    Copyright 2017 NXP
+ 
+     Redistribution and use in source and binary forms, with or without
+     modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/Makefile b/drivers/bus/dpaa/Makefile
+index f672f5400714..16bce89b87f9 100644
+--- a/drivers/bus/dpaa/Makefile
++++ b/drivers/bus/dpaa/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/base/fman/fman.c b/drivers/bus/dpaa/base/fman/fman.c
+index 3816dba5ca6d..e67ee41368aa 100644
+--- a/drivers/bus/dpaa/base/fman/fman.c
++++ b/drivers/bus/dpaa/base/fman/fman.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2010-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/fman/fman_hw.c b/drivers/bus/dpaa/base/fman/fman_hw.c
+index 077c17c07e1d..8c51fa4bfea8 100644
+--- a/drivers/bus/dpaa/base/fman/fman_hw.c
++++ b/drivers/bus/dpaa/base/fman/fman_hw.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/fman/netcfg_layer.c b/drivers/bus/dpaa/base/fman/netcfg_layer.c
+index 26cff84ab880..2e00711d98cc 100644
+--- a/drivers/bus/dpaa/base/fman/netcfg_layer.c
++++ b/drivers/bus/dpaa/base/fman/netcfg_layer.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2010-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/fman/of.c b/drivers/bus/dpaa/base/fman/of.c
+index b2d7c020517e..c3576368edb3 100644
+--- a/drivers/bus/dpaa/base/fman/of.c
++++ b/drivers/bus/dpaa/base/fman/of.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2010-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/bman.c b/drivers/bus/dpaa/base/qbman/bman.c
+index 0480caa9e26e..d35083fdfd7c 100644
+--- a/drivers/bus/dpaa/base/qbman/bman.c
++++ b/drivers/bus/dpaa/base/qbman/bman.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/bman.h b/drivers/bus/dpaa/base/qbman/bman.h
+index ef0a896ec880..2ec93b0e66ae 100644
+--- a/drivers/bus/dpaa/base/qbman/bman.h
++++ b/drivers/bus/dpaa/base/qbman/bman.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2010-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/bman_driver.c b/drivers/bus/dpaa/base/qbman/bman_driver.c
+index 5c13a803da0a..fd3b6c6286ac 100644
+--- a/drivers/bus/dpaa/base/qbman/bman_driver.c
++++ b/drivers/bus/dpaa/base/qbman/bman_driver.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/bman_priv.h b/drivers/bus/dpaa/base/qbman/bman_priv.h
+index 07d9cec6a9d4..70a3ba68163e 100644
+--- a/drivers/bus/dpaa/base/qbman/bman_priv.h
++++ b/drivers/bus/dpaa/base/qbman/bman_priv.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/dpaa_alloc.c b/drivers/bus/dpaa/base/qbman/dpaa_alloc.c
+index 35dba7f76f2e..afe48ead4e44 100644
+--- a/drivers/bus/dpaa/base/qbman/dpaa_alloc.c
++++ b/drivers/bus/dpaa/base/qbman/dpaa_alloc.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2009-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/dpaa_sys.c b/drivers/bus/dpaa/base/qbman/dpaa_sys.c
+index 0017da52377e..04054463d6e0 100644
+--- a/drivers/bus/dpaa/base/qbman/dpaa_sys.c
++++ b/drivers/bus/dpaa/base/qbman/dpaa_sys.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2013-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/dpaa_sys.h b/drivers/bus/dpaa/base/qbman/dpaa_sys.h
+index bee9fe57d2c9..950d23fec535 100644
+--- a/drivers/bus/dpaa/base/qbman/dpaa_sys.h
++++ b/drivers/bus/dpaa/base/qbman/dpaa_sys.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/process.c b/drivers/bus/dpaa/base/qbman/process.c
+index b8ec5398df05..5422ae9204c4 100644
+--- a/drivers/bus/dpaa/base/qbman/process.c
++++ b/drivers/bus/dpaa/base/qbman/process.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2011-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index 20e947729e86..d8181b10fc97 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/qman.h b/drivers/bus/dpaa/base/qbman/qman.h
+index 37b73dfff817..ad7065bfe5b1 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.h
++++ b/drivers/bus/dpaa/base/qbman/qman.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/qman_driver.c b/drivers/bus/dpaa/base/qbman/qman_driver.c
+index f5d4b3794db1..9299fd1000e5 100644
+--- a/drivers/bus/dpaa/base/qbman/qman_driver.c
++++ b/drivers/bus/dpaa/base/qbman/qman_driver.c
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/base/qbman/qman_priv.h b/drivers/bus/dpaa/base/qbman/qman_priv.h
+index e78d90bd4143..1f73ef7d2e9f 100644
+--- a/drivers/bus/dpaa/base/qbman/qman_priv.h
++++ b/drivers/bus/dpaa/base/qbman/qman_priv.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2008-2016 Freescale Semiconductor Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index 55c106e27433..b09f98a7c076 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/include/dpaa_bits.h b/drivers/bus/dpaa/include/dpaa_bits.h
+index 71f2d809ce61..d49f3909bb6d 100644
+--- a/drivers/bus/dpaa/include/dpaa_bits.h
++++ b/drivers/bus/dpaa/include/dpaa_bits.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/include/dpaa_list.h b/drivers/bus/dpaa/include/dpaa_list.h
+index 871e6121ec22..a070cc188b51 100644
+--- a/drivers/bus/dpaa/include/dpaa_list.h
++++ b/drivers/bus/dpaa/include/dpaa_list.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/include/dpaa_rbtree.h b/drivers/bus/dpaa/include/dpaa_rbtree.h
+index f8c9b5937343..ed6d970446ab 100644
+--- a/drivers/bus/dpaa/include/dpaa_rbtree.h
++++ b/drivers/bus/dpaa/include/dpaa_rbtree.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/include/fsl_fman.h b/drivers/bus/dpaa/include/fsl_fman.h
+index 95aee67ab3ba..e6a7ae6db8cf 100644
+--- a/drivers/bus/dpaa/include/fsl_fman.h
++++ b/drivers/bus/dpaa/include/fsl_fman.h
+@@ -4,7 +4,7 @@
+  *
+  *   BSD LICENSE
+  *
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/include/of.h b/drivers/bus/dpaa/include/of.h
+index 2984b1e17f72..936f5e733765 100644
+--- a/drivers/bus/dpaa/include/of.h
++++ b/drivers/bus/dpaa/include/of.h
+@@ -5,7 +5,7 @@
+  *   BSD LICENSE
+  *
+  * Copyright 2010-2016 Freescale Semiconductor, Inc.
+- * Copyright 2017 NXP.
++ * Copyright 2017 NXP
+  *
+  * Redistribution and use in source and binary forms, with or without
+  * modification, are permitted provided that the following conditions are met:
+diff --git a/drivers/bus/dpaa/rte_dpaa_bus.h b/drivers/bus/dpaa/rte_dpaa_bus.h
+index c0b332d677b6..1b7207f094ae 100644
+--- a/drivers/bus/dpaa/rte_dpaa_bus.h
++++ b/drivers/bus/dpaa/rte_dpaa_bus.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/bus/dpaa/rte_dpaa_logs.h b/drivers/bus/dpaa/rte_dpaa_logs.h
+index f36aac12908d..f0e56b8d5710 100644
+--- a/drivers/bus/dpaa/rte_dpaa_logs.h
++++ b/drivers/bus/dpaa/rte_dpaa_logs.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa_sec/Makefile b/drivers/crypto/dpaa_sec/Makefile
+index 17bc79c683a1..70e5624912e9 100644
+--- a/drivers/crypto/dpaa_sec/Makefile
++++ b/drivers/crypto/dpaa_sec/Makefile
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.c b/drivers/crypto/dpaa_sec/dpaa_sec.c
+index 0f2da2a9485b..569702164650 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.c
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.h b/drivers/crypto/dpaa_sec/dpaa_sec.h
+index 268f4a011956..bfd12e2079c5 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.h
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2016 NXP.
++ *   Copyright 2016 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa/Makefile b/drivers/mempool/dpaa/Makefile
+index c49b0ee37e52..ce5c6bf8e5e5 100644
+--- a/drivers/mempool/dpaa/Makefile
++++ b/drivers/mempool/dpaa/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2016 NXP.
++#   Copyright 2016 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.c b/drivers/mempool/dpaa/dpaa_mempool.c
+index cf5066bbc67c..7ac7f1f957a5 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.c
++++ b/drivers/mempool/dpaa/dpaa_mempool.c
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.h b/drivers/mempool/dpaa/dpaa_mempool.h
+index 513ffdc9189b..8eeb8fc13173 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.h
++++ b/drivers/mempool/dpaa/dpaa_mempool.h
+@@ -1,7 +1,7 @@
+ /*-
+  *   BSD LICENSE
+  *
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa/Makefile b/drivers/net/dpaa/Makefile
+index c644353f5c6c..389614420d39 100644
+--- a/drivers/net/dpaa/Makefile
++++ b/drivers/net/dpaa/Makefile
+@@ -1,6 +1,6 @@
+ #   BSD LICENSE
+ #
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index 62038fd2f524..f57fdc33fee9 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa/dpaa_ethdev.h b/drivers/net/dpaa/dpaa_ethdev.h
+index b81522a521b0..3831bc825cf9 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.h
++++ b/drivers/net/dpaa/dpaa_ethdev.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright (c) 2014-2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index cdc8e539bd02..6d3495683bf5 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/drivers/net/dpaa/dpaa_rxtx.h b/drivers/net/dpaa/dpaa_rxtx.h
+index 8f9944ba6c66..812d32808873 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.h
++++ b/drivers/net/dpaa/dpaa_rxtx.h
+@@ -2,7 +2,7 @@
+  *   BSD LICENSE
+  *
+  *   Copyright 2016 Freescale Semiconductor, Inc. All rights reserved.
+- *   Copyright 2017 NXP.
++ *   Copyright 2017 NXP
+  *
+  *   Redistribution and use in source and binary forms, with or without
+  *   modification, are permitted provided that the following conditions
+diff --git a/mk/machine/dpaa/rte.vars.mk b/mk/machine/dpaa/rte.vars.mk
+index 356a6af5ac3f..cb04dd97aaad 100644
+--- a/mk/machine/dpaa/rte.vars.mk
++++ b/mk/machine/dpaa/rte.vars.mk
+@@ -1,7 +1,7 @@
+ #   BSD LICENSE
+ #
+ #   Copyright (c) 2016 Freescale Semiconductor, Inc. All rights reserved.
+-#   Copyright 2017 NXP.
++#   Copyright 2017 NXP
+ #
+ #   Redistribution and use in source and binary forms, with or without
+ #   modification, are permitted provided that the following conditions
+-- 
+2.14.3
+

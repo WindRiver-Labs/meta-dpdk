@@ -1,0 +1,66 @@
+From 807f5e8babc04eb41f4401e0d1762538413ad9e1 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 16 Jan 2018 00:14:35 +0530
+Subject: [PATCH 048/166] bus/fslmc: introduce API to consume dqrr using index
+
+A new API qbman_swp_dqrr_idx_consume is defined which takes
+input as DQRR index to consume corresponding DQRR entry.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h | 7 +++++++
+ drivers/bus/fslmc/qbman/qbman_portal.c             | 7 +++++++
+ drivers/bus/fslmc/rte_bus_fslmc_version.map        | 1 +
+ 3 files changed, 15 insertions(+)
+
+diff --git a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+index 1e6566029dce..efa486183d1a 100644
+--- a/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
++++ b/drivers/bus/fslmc/qbman/include/fsl_qbman_portal.h
+@@ -410,6 +410,13 @@ const struct qbman_result *qbman_swp_dqrr_next(struct qbman_swp *p);
+  */
+ void qbman_swp_dqrr_consume(struct qbman_swp *s, const struct qbman_result *dq);
+ 
++/**
++ * qbman_swp_dqrr_idx_consume() -  Given the DQRR index consume the DQRR entry
++ * @s: the software portal object.
++ * @dqrr_index: the DQRR index entry to be consumed.
++ */
++void qbman_swp_dqrr_idx_consume(struct qbman_swp *s, uint8_t dqrr_index);
++
+ /**
+  * qbman_get_dqrr_idx() - Get dqrr index from the given dqrr
+  * @dqrr: the given dqrr object.
+diff --git a/drivers/bus/fslmc/qbman/qbman_portal.c b/drivers/bus/fslmc/qbman/qbman_portal.c
+index 809770c7db90..314a70e88e8c 100644
+--- a/drivers/bus/fslmc/qbman/qbman_portal.c
++++ b/drivers/bus/fslmc/qbman/qbman_portal.c
+@@ -881,6 +881,13 @@ void qbman_swp_dqrr_consume(struct qbman_swp *s,
+ 	qbman_cinh_write(&s->sys, QBMAN_CINH_SWP_DCAP, QBMAN_IDX_FROM_DQRR(dq));
+ }
+ 
++/* Consume DQRR entries previously returned from qbman_swp_dqrr_next(). */
++void qbman_swp_dqrr_idx_consume(struct qbman_swp *s,
++			    uint8_t dqrr_index)
++{
++	qbman_cinh_write(&s->sys, QBMAN_CINH_SWP_DCAP, dqrr_index);
++}
++
+ /*********************************/
+ /* Polling user-provided storage */
+ /*********************************/
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index 16b759d8b8c1..b9dd063a05f3 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -97,6 +97,7 @@ DPDK_18.02 {
+ 	dpaa2_virt_mode;
+ 	qbman_fq_query_state;
+ 	qbman_fq_state_frame_count;
++	qbman_swp_dqrr_idx_consume;
+ 	rte_fslmc_get_device_count;
+ 
+ } DPDK_17.11;
+-- 
+2.14.3
+

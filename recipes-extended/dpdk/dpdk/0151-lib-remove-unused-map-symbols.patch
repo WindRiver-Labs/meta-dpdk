@@ -1,0 +1,88 @@
+From 407eaf05bd7e541e73bc776e9721d776308a883d Mon Sep 17 00:00:00 2001
+From: Pavan Nikhilesh <pbhagavatula@caviumnetworks.com>
+Date: Mon, 12 Feb 2018 19:53:05 +0530
+Subject: [PATCH 151/166] lib: remove unused map symbols
+
+Signed-off-by: Pavan Nikhilesh <pbhagavatula@caviumnetworks.com>
+Acked-by: Neil Horman <nhorman@tuxdriver.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+Acked-by: Ferruh Yigit <ferruh.yigit@intel.com>
+---
+ drivers/bus/fslmc/rte_bus_fslmc_version.map       | 2 --
+ drivers/mempool/dpaa/rte_mempool_dpaa_version.map | 1 -
+ lib/librte_eal/rte_eal_version.map                | 1 -
+ lib/librte_ether/rte_ethdev_version.map           | 1 -
+ lib/librte_ring/rte_ring_version.map              | 1 -
+ 5 files changed, 6 deletions(-)
+
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index 268ddaadb76a..c02b9c611974 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -28,7 +28,6 @@ DPDK_17.05 {
+ 	qbman_eq_desc_set_no_orp;
+ 	qbman_eq_desc_set_qd;
+ 	qbman_eq_desc_set_response;
+-	qbman_get_version;
+ 	qbman_pull_desc_clear;
+ 	qbman_pull_desc_set_fq;
+ 	qbman_pull_desc_set_numframes;
+@@ -41,7 +40,6 @@ DPDK_17.05 {
+ 	qbman_swp_acquire;
+ 	qbman_swp_pull;
+ 	qbman_swp_release;
+-	qbman_swp_send_multiple;
+ 	rte_fslmc_driver_register;
+ 	rte_fslmc_driver_unregister;
+ 	rte_fslmc_vfio_dmamap;
+diff --git a/drivers/mempool/dpaa/rte_mempool_dpaa_version.map b/drivers/mempool/dpaa/rte_mempool_dpaa_version.map
+index cc635c736f2e..d05f274d06a0 100644
+--- a/drivers/mempool/dpaa/rte_mempool_dpaa_version.map
++++ b/drivers/mempool/dpaa/rte_mempool_dpaa_version.map
+@@ -2,7 +2,6 @@ DPDK_17.11 {
+ 	global:
+ 
+ 	rte_dpaa_bpid_info;
+-	rte_dpaa_pool_table;
+ 
+ 	local: *;
+ };
+diff --git a/lib/librte_eal/rte_eal_version.map b/lib/librte_eal/rte_eal_version.map
+index 70347f4d151d..977f45a533cc 100644
+--- a/lib/librte_eal/rte_eal_version.map
++++ b/lib/librte_eal/rte_eal_version.map
+@@ -227,7 +227,6 @@ EXPERIMENTAL {
+ 	rte_service_map_lcore_get;
+ 	rte_service_map_lcore_set;
+ 	rte_service_probe_capability;
+-	rte_service_reset;
+ 	rte_service_run_iter_on_app_lcore;
+ 	rte_service_runstate_get;
+ 	rte_service_runstate_set;
+diff --git a/lib/librte_ether/rte_ethdev_version.map b/lib/librte_ether/rte_ethdev_version.map
+index e9681ac8e8cb..e21eb56e3f0e 100644
+--- a/lib/librte_ether/rte_ethdev_version.map
++++ b/lib/librte_ether/rte_ethdev_version.map
+@@ -156,7 +156,6 @@ DPDK_17.08 {
+ 	rte_flow_copy;
+ 	rte_flow_isolate;
+ 	rte_tm_capabilities_get;
+-	rte_tm_get_leaf_nodes;
+ 	rte_tm_hierarchy_commit;
+ 	rte_tm_level_capabilities_get;
+ 	rte_tm_mark_ip_dscp;
+diff --git a/lib/librte_ring/rte_ring_version.map b/lib/librte_ring/rte_ring_version.map
+index 5474b985e55c..d935efd0dc65 100644
+--- a/lib/librte_ring/rte_ring_version.map
++++ b/lib/librte_ring/rte_ring_version.map
+@@ -7,7 +7,6 @@ DPDK_2.0 {
+ 	rte_ring_init;
+ 	rte_ring_list_dump;
+ 	rte_ring_lookup;
+-	rte_ring_set_water_mark;
+ 
+ 	local: *;
+ };
+-- 
+2.14.3
+

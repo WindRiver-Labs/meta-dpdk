@@ -1,0 +1,28 @@
+From f6eda37be73077028cc2a1f5588693b60cc853d0 Mon Sep 17 00:00:00 2001
+From: Ashish Jain <ashish.jain@nxp.com>
+Date: Mon, 5 Mar 2018 16:35:17 +0530
+Subject: [PATCH 159/166] PVT: crypto/dpaa_sec: add macro for device name
+
+Signed-off-by: Ashish Jain <ashish.jain@nxp.com>
+DPDK-1215
+---
+ drivers/crypto/dpaa_sec/dpaa_sec.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.h b/drivers/crypto/dpaa_sec/dpaa_sec.h
+index 6db1d2b2d21e..91548da57bc5 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.h
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.h
+@@ -33,6 +33,9 @@
+ #ifndef _DPAA_SEC_H_
+ #define _DPAA_SEC_H_
+ 
++#define CRYPTODEV_NAME_DPAA_SEC_PMD	crypto_dpaa_sec
++/**< NXP DPAA - SEC PMD device name */
++
+ #define NUM_POOL_CHANNELS	4
+ #define DPAA_SEC_BURST		7
+ #define DPAA_SEC_ALG_UNSUPPORT	(-1)
+-- 
+2.14.3
+

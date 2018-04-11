@@ -1,0 +1,76 @@
+From 620ac86f8e33636690f0a100a9e4ab09874c7f20 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 12 Jan 2018 14:30:48 +0530
+Subject: [PATCH 091/166] PVT: dpaa: register dpaa mempool ops as platform
+ mempool
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa-linuxapp-gcc | 1 -
+ drivers/bus/dpaa/dpaa_bus.c              | 3 +++
+ drivers/bus/dpaa/rte_dpaa_bus.h          | 2 ++
+ drivers/mempool/dpaa/dpaa_mempool.c      | 2 +-
+ 4 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/config/defconfig_arm64-dpaa-linuxapp-gcc b/config/defconfig_arm64-dpaa-linuxapp-gcc
+index c163f9da3733..958eff5756dd 100644
+--- a/config/defconfig_arm64-dpaa-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa-linuxapp-gcc
+@@ -53,7 +53,6 @@ CONFIG_RTE_LIBRTE_DPAA_HWDEBUG=n
+ 
+ # NXP DPAA Mempool
+ CONFIG_RTE_LIBRTE_DPAA_MEMPOOL=y
+-CONFIG_RTE_MBUF_DEFAULT_MEMPOOL_OPS="dpaa"
+ 
+ # Compile software NXP DPAA PMD
+ CONFIG_RTE_LIBRTE_DPAA_PMD=y
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index a7e597ea9ee4..55c106e27433 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -57,6 +57,7 @@
+ #include <rte_malloc.h>
+ #include <rte_ring.h>
+ #include <rte_bus.h>
++#include <rte_mbuf.h>
+ 
+ #include <rte_dpaa_bus.h>
+ #include <rte_dpaa_logs.h>
+@@ -436,6 +437,8 @@ rte_dpaa_bus_scan(void)
+ 		return ret;
+ 	}
+ 
++	rte_mbuf_register_platform_mempool_ops(DPAA_MEMPOOL_OPS_NAME);
++
+ 	/* create the key, supplying a function that'll be invoked
+ 	 * when a portal affined thread will be deleted.
+ 	 */
+diff --git a/drivers/bus/dpaa/rte_dpaa_bus.h b/drivers/bus/dpaa/rte_dpaa_bus.h
+index c91c3a75a482..c0b332d677b6 100644
+--- a/drivers/bus/dpaa/rte_dpaa_bus.h
++++ b/drivers/bus/dpaa/rte_dpaa_bus.h
+@@ -43,6 +43,8 @@
+ 
+ #define FSL_DPAA_BUS_NAME	"FSL_DPAA_BUS"
+ 
++#define DPAA_MEMPOOL_OPS_NAME	"dpaa"
++
+ #define DEV_TO_DPAA_DEVICE(ptr)	\
+ 		container_of(ptr, struct rte_dpaa_device, device)
+ 
+diff --git a/drivers/mempool/dpaa/dpaa_mempool.c b/drivers/mempool/dpaa/dpaa_mempool.c
+index 9d6a5a04fbbd..cf5066bbc67c 100644
+--- a/drivers/mempool/dpaa/dpaa_mempool.c
++++ b/drivers/mempool/dpaa/dpaa_mempool.c
+@@ -319,7 +319,7 @@ dpaa_register_memory_area(const struct rte_mempool *mp,
+ }
+ 
+ struct rte_mempool_ops dpaa_mpool_ops = {
+-	.name = "dpaa",
++	.name = DPAA_MEMPOOL_OPS_NAME,
+ 	.alloc = dpaa_mbuf_create_pool,
+ 	.free = dpaa_mbuf_free_pool,
+ 	.enqueue = dpaa_mbuf_free_bulk,
+-- 
+2.14.3
+

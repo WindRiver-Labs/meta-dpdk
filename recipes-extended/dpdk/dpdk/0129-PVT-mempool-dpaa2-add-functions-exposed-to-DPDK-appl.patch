@@ -1,0 +1,181 @@
+From 84bbd948301d50c2b6f3d25b5d91ded15d893af6 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Wed, 14 Feb 2018 15:48:31 +0530
+Subject: [PATCH 129/166] PVT: mempool/dpaa2: add functions exposed to DPDK
+ applications
+
+There are two API's which are required by NXP specific Command Interface
+Application (AIOP CMDIF). This patch exposes these two API's.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ doc/api/doxy-api-index.md                          |  1 +
+ doc/api/doxy-api.conf                              |  1 +
+ drivers/mempool/dpaa2/Makefile                     |  2 +
+ drivers/mempool/dpaa2/dpaa2_hw_mempool.c           | 30 ++++++++++++
+ drivers/mempool/dpaa2/rte_dpaa2_mempool.h          | 53 ++++++++++++++++++++++
+ .../mempool/dpaa2/rte_mempool_dpaa2_version.map    |  8 ++++
+ 6 files changed, 95 insertions(+)
+ create mode 100644 drivers/mempool/dpaa2/rte_dpaa2_mempool.h
+
+diff --git a/doc/api/doxy-api-index.md b/doc/api/doxy-api-index.md
+index dfd47916aef9..61f46d28da38 100644
+--- a/doc/api/doxy-api-index.md
++++ b/doc/api/doxy-api-index.md
+@@ -62,6 +62,7 @@ The public API headers are grouped by topics:
+   [i40e]               (@ref rte_pmd_i40e.h),
+   [bnxt]               (@ref rte_pmd_bnxt.h),
+   [dpaa]               (@ref rte_pmd_dpaa.h),
++  [dpaa2]              (@ref rte_dpaa2_mempool.h),
+   [crypto_scheduler]   (@ref rte_cryptodev_scheduler.h)
+ 
+ - **memory**:
+diff --git a/doc/api/doxy-api.conf b/doc/api/doxy-api.conf
+index 5be0633a35e7..411bfe8e34c2 100644
+--- a/doc/api/doxy-api.conf
++++ b/doc/api/doxy-api.conf
+@@ -31,6 +31,7 @@
+ PROJECT_NAME            = DPDK
+ INPUT                   = doc/api/doxy-api-index.md \
+                           drivers/crypto/scheduler \
++                          drivers/mempool/dpaa2 \
+                           drivers/net/bnxt \
+                           drivers/net/bonding \
+                           drivers/net/dpaa \
+diff --git a/drivers/mempool/dpaa2/Makefile b/drivers/mempool/dpaa2/Makefile
+index 5bd7f9de38f8..8cd46bfff8ce 100644
+--- a/drivers/mempool/dpaa2/Makefile
++++ b/drivers/mempool/dpaa2/Makefile
+@@ -60,4 +60,6 @@ SRCS-$(CONFIG_RTE_LIBRTE_DPAA2_MEMPOOL) += dpaa2_hw_mempool.c
+ LDLIBS += -lrte_bus_fslmc
+ LDLIBS += -lrte_eal -lrte_mempool -lrte_ring
+ 
++SYMLINK-$(CONFIG_RTE_LIBRTE_DPAA2_MEMPOOL)-include := rte_dpaa2_mempool.h
++
+ include $(RTE_SDK)/mk/rte.lib.mk
+diff --git a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+index 123ae3b756e6..896a09c4cb22 100644
+--- a/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
++++ b/drivers/mempool/dpaa2/dpaa2_hw_mempool.c
+@@ -47,6 +47,7 @@
+ #include <rte_cycles.h>
+ #include <rte_kvargs.h>
+ #include <rte_dev.h>
++#include "rte_dpaa2_mempool.h"
+ 
+ #include <fslmc_logs.h>
+ #include <mc/fsl_dpbp.h>
+@@ -259,6 +260,35 @@ rte_dpaa2_mbuf_release(struct rte_mempool *pool __rte_unused,
+ 	}
+ }
+ 
++uint16_t
++rte_dpaa2_mbuf_pool_bpid(struct rte_mempool *mp)
++{
++	struct dpaa2_bp_info *bp_info;
++
++	bp_info = mempool_to_bpinfo(mp);
++	if (!(bp_info->bp_list)) {
++		RTE_LOG(ERR, PMD, "DPAA2 buffer pool not configured\n");
++		return -ENOMEM;
++	}
++
++	return bp_info->bpid;
++}
++
++struct rte_mbuf *
++rte_dpaa2_mbuf_from_buf_addr(struct rte_mempool *mp, void *buf_addr)
++{
++	struct dpaa2_bp_info *bp_info;
++
++	bp_info = mempool_to_bpinfo(mp);
++	if (!(bp_info->bp_list)) {
++		RTE_LOG(ERR, PMD, "DPAA2 buffer pool not configured\n");
++		return NULL;
++	}
++
++	return (struct rte_mbuf *)((uint8_t *)buf_addr -
++			bp_info->meta_data_size);
++}
++
+ int
+ rte_dpaa2_mbuf_alloc_bulk(struct rte_mempool *pool,
+ 			  void **obj_table, unsigned int count)
+diff --git a/drivers/mempool/dpaa2/rte_dpaa2_mempool.h b/drivers/mempool/dpaa2/rte_dpaa2_mempool.h
+new file mode 100644
+index 000000000000..4a22b7c42ed4
+--- /dev/null
++++ b/drivers/mempool/dpaa2/rte_dpaa2_mempool.h
+@@ -0,0 +1,53 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2018 NXP
++ */
++
++#ifndef __RTE_DPAA2_MEMPOOL_H__
++#define __RTE_DPAA2_MEMPOOL_H__
++
++/**
++ * @file
++ *
++ * NXP specific mempool related functions.
++ *
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <rte_mempool.h>
++
++/**
++ * Get BPID corresponding to the packet pool
++ *
++ * @param mp
++ *   memory pool
++ *
++ * @return
++ *   BPID of the buffer pool
++ */
++uint16_t
++rte_dpaa2_mbuf_pool_bpid(struct rte_mempool *mp);
++
++/**
++ * Get MBUF from the corresponding 'buf_addr'
++ *
++ * @param mp
++ *   memory pool
++ * @param buf_addr
++ *   The 'buf_addr' of the mbuf. This is the start buffer address
++ *   of the packet buffer (mbuf).
++ *
++ * @return
++ *   - MBUF pointer for success
++ *   - NULL in case of error
++ */
++struct rte_mbuf *
++rte_dpaa2_mbuf_from_buf_addr(struct rte_mempool *mp, void *buf_addr);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __RTE_DPAA2_MEMPOOL_H__ */
+diff --git a/drivers/mempool/dpaa2/rte_mempool_dpaa2_version.map b/drivers/mempool/dpaa2/rte_mempool_dpaa2_version.map
+index a8aa685c3738..b45e7a9ac16a 100644
+--- a/drivers/mempool/dpaa2/rte_mempool_dpaa2_version.map
++++ b/drivers/mempool/dpaa2/rte_mempool_dpaa2_version.map
+@@ -6,3 +6,11 @@ DPDK_17.05 {
+ 
+ 	local: *;
+ };
++
++DPDK_18.05 {
++	global:
++
++	rte_dpaa2_mbuf_from_buf_addr;
++	rte_dpaa2_mbuf_pool_bpid;
++
++} DPDK_17.05;
+-- 
+2.14.3
+

@@ -1,0 +1,71 @@
+From b46c0afc9d9f0c81b442736a727dfb50c5fb7a9e Mon Sep 17 00:00:00 2001
+From: Akhil Goyal <akhil.goyal@nxp.com>
+Date: Thu, 14 Dec 2017 12:49:23 +0530
+Subject: [PATCH 054/166] examples/ipsec-secgw: improve ipsec dequeue logic
+
+Since the processing of crypto operations may take time
+due to hardware offload, all the packets may not be available
+in the single dequeue command.
+So it may happen that there is leakage of cops, and there is
+nobody to dequeue the packets because dequeue of crypto ops is
+done only once for a particular queue pair even if it has more
+packets in flight.
+
+This patch dequeue the packets again if the inflight packets are
+more than the max packet burst.
+
+Signed-off-by: Akhil Goyal <akhil.goyal@nxp.com>
+---
+ examples/ipsec-secgw/ipsec.c | 19 ++++++++++++++-----
+ 1 file changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/examples/ipsec-secgw/ipsec.c b/examples/ipsec-secgw/ipsec.c
+index c850c7b86885..a70d3f52df0f 100644
+--- a/examples/ipsec-secgw/ipsec.c
++++ b/examples/ipsec-secgw/ipsec.c
+@@ -371,12 +371,10 @@ ipsec_dequeue(ipsec_xform_fn xform_func, struct ipsec_ctx *ipsec_ctx,
+ 	struct ipsec_sa *sa;
+ 	struct rte_mbuf *pkt;
+ 
+-	for (i = 0; i < ipsec_ctx->nb_qps && nb_pkts < max_pkts; i++) {
++	for (i = 0; i < ipsec_ctx->nb_qps && nb_pkts < max_pkts;) {
+ 		struct cdev_qp *cqp;
+ 
+-		cqp = &ipsec_ctx->tbl[ipsec_ctx->last_qp++];
+-		if (ipsec_ctx->last_qp == ipsec_ctx->nb_qps)
+-			ipsec_ctx->last_qp %= ipsec_ctx->nb_qps;
++		cqp = &ipsec_ctx->tbl[ipsec_ctx->last_qp];
+ 
+ 		while (cqp->ol_pkts_cnt > 0 && nb_pkts < max_pkts) {
+ 			pkt = cqp->ol_pkts[--cqp->ol_pkts_cnt];
+@@ -391,8 +389,13 @@ ipsec_dequeue(ipsec_xform_fn xform_func, struct ipsec_ctx *ipsec_ctx,
+ 			pkts[nb_pkts++] = pkt;
+ 		}
+ 
+-		if (cqp->in_flight == 0)
++		if (cqp->in_flight == 0) {
++			ipsec_ctx->last_qp++;
++			if (ipsec_ctx->last_qp == ipsec_ctx->nb_qps)
++				ipsec_ctx->last_qp %= ipsec_ctx->nb_qps;
++			i++;
+ 			continue;
++		}
+ 
+ 		nb_cops = rte_cryptodev_dequeue_burst(cqp->id, cqp->qp,
+ 				cops, max_pkts - nb_pkts);
+@@ -416,6 +419,12 @@ ipsec_dequeue(ipsec_xform_fn xform_func, struct ipsec_ctx *ipsec_ctx,
+ 				}
+ 			}
+ 			pkts[nb_pkts++] = pkt;
++			if (cqp->in_flight < max_pkts) {
++				ipsec_ctx->last_qp++;
++				if (ipsec_ctx->last_qp == ipsec_ctx->nb_qps)
++					ipsec_ctx->last_qp %= ipsec_ctx->nb_qps;
++				i++;
++			}
+ 		}
+ 	}
+ 
+-- 
+2.14.3
+

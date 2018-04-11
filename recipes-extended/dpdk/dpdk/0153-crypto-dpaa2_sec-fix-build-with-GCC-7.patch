@@ -1,0 +1,38 @@
+From e8f16896674cce97b5d9775221e525afaba7abf0 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Tue, 30 Jan 2018 14:53:30 +0530
+Subject: [PATCH 153/166] crypto/dpaa2_sec: fix build with GCC < 7
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This patch fixes the compilation with compiler GCC < 7
+
+dpaa2_sec/hw/rta/operation_cmd.h:12:32: error: unknown option after
+ ‘#pragma GCC diagnostic’ kind [-Werror=pragmas]
+ #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
+
+Fixes: 2ab9a9483196 ("crypto/dpaa2_sec: fix build with GCC 7")
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+index 0eaa54ff14e2..2dc53b9e7646 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+@@ -41,7 +41,9 @@
+ #ifndef __RTA_OPERATION_CMD_H__
+ #define __RTA_OPERATION_CMD_H__
+ 
++#if defined(RTE_TOOLCHAIN_GCC) && (GCC_VERSION >= 70000)
+ #pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
++#endif
+ 
+ extern enum rta_sec_era rta_sec_era;
+ 
+-- 
+2.14.3
+

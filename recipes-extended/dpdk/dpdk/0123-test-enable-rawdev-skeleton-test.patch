@@ -1,0 +1,80 @@
+From 55fc56e19905cbdf54031d40771a09ec8c20acbb Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 6 Feb 2018 09:11:37 +0530
+Subject: [PATCH 123/166] test: enable rawdev skeleton test
+
+Skeleton rawdevice test cases are part of driver layer. This patch
+allows test cases to be executed using 'rawdev_autotest' command
+in test framework.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ MAINTAINERS             |  1 +
+ test/test/Makefile      |  4 ++++
+ test/test/test_rawdev.c | 27 +++++++++++++++++++++++++++
+ 3 files changed, 32 insertions(+)
+ create mode 100644 test/test/test_rawdev.c
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 0fb159dc7873..537664ed3d4f 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -297,6 +297,7 @@ M: Shreyansh Jain <shreyansh.jain@nxp.com>
+ M: Hemant Agrawal <hemant.agrawal@nxp.com>
+ F: lib/librte_rawdev/
+ F: drivers/raw/skeleton_rawdev/
++F: test/test/test_rawdev.c
+ 
+ 
+ Bus Drivers
+diff --git a/test/test/Makefile b/test/test/Makefile
+index bb54c9808deb..038343d3830c 100644
+--- a/test/test/Makefile
++++ b/test/test/Makefile
+@@ -214,6 +214,10 @@ SRCS-$(CONFIG_RTE_LIBRTE_PMD_SW_EVENTDEV) += test_eventdev_sw.c
+ SRCS-$(CONFIG_RTE_LIBRTE_PMD_OCTEONTX_SSOVF) += test_eventdev_octeontx.c
+ endif
+ 
++ifeq ($(CONFIG_RTE_LIBRTE_RAWDEV),y)
++SRCS-y += test_rawdev.c
++endif
++
+ SRCS-$(CONFIG_RTE_LIBRTE_KVARGS) += test_kvargs.c
+ 
+ CFLAGS += -O3
+diff --git a/test/test/test_rawdev.c b/test/test/test_rawdev.c
+new file mode 100644
+index 000000000000..043a38a13f8c
+--- /dev/null
++++ b/test/test/test_rawdev.c
+@@ -0,0 +1,27 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2017 NXP
++ */
++#include <rte_common.h>
++#include <rte_mbuf.h>
++#include <rte_malloc.h>
++#include <rte_memcpy.h>
++#include <rte_dev.h>
++#include <rte_rawdev.h>
++#include <rte_bus_vdev.h>
++
++#include "test.h"
++
++static int
++test_rawdev_selftest_impl(const char *pmd, const char *opts)
++{
++	rte_vdev_init(pmd, opts);
++	return rte_rawdev_selftest(rte_rawdev_get_dev_id(pmd));
++}
++
++static int
++test_rawdev_selftest_skeleton(void)
++{
++	return test_rawdev_selftest_impl("rawdev_skeleton", "");
++}
++
++REGISTER_TEST_COMMAND(rawdev_autotest, test_rawdev_selftest_skeleton);
+-- 
+2.14.3
+

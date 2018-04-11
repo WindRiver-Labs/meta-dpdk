@@ -1,0 +1,53 @@
+From 4e7aa3a9b77fdd2a8db3c70da4755775ef0b3ab0 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 6 Nov 2017 23:12:23 +0530
+Subject: [PATCH 025/166] net/dpaa: change Tx HW budget to 7
+
+change the TX budget to 7 to sync best with the hw.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa/dpaa_ethdev.h | 2 +-
+ drivers/net/dpaa/dpaa_rxtx.c   | 5 +++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/dpaa/dpaa_ethdev.h b/drivers/net/dpaa/dpaa_ethdev.h
+index b26e4110a03f..95d745ee068a 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.h
++++ b/drivers/net/dpaa/dpaa_ethdev.h
+@@ -67,7 +67,7 @@
+ #define DPAA_MAX_MAC_FILTER (MEMAC_NUM_OF_PADDRS + 1)
+ 
+ /*Maximum number of slots available in TX ring*/
+-#define MAX_TX_RING_SLOTS	8
++#define DPAA_TX_BURST_SIZE	7
+ 
+ #ifndef VLAN_TAG_SIZE
+ #define VLAN_TAG_SIZE   4 /** < Vlan Header Length */
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index c0cfec9cfa52..1b0ca9a7afa2 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -695,7 +695,7 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 	struct rte_mbuf *mbuf, *mi = NULL;
+ 	struct rte_mempool *mp;
+ 	struct dpaa_bp_info *bp_info;
+-	struct qm_fd fd_arr[MAX_TX_RING_SLOTS];
++	struct qm_fd fd_arr[DPAA_TX_BURST_SIZE];
+ 	uint32_t frames_to_send, loop, i = 0;
+ 	uint16_t state;
+ 	int ret;
+@@ -709,7 +709,8 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 	DPAA_DP_LOG(DEBUG, "Transmitting %d buffers on queue: %p", nb_bufs, q);
+ 
+ 	while (nb_bufs) {
+-		frames_to_send = (nb_bufs >> 3) ? MAX_TX_RING_SLOTS : nb_bufs;
++		frames_to_send = (nb_bufs > DPAA_TX_BURST_SIZE) ?
++				DPAA_TX_BURST_SIZE : nb_bufs;
+ 		for (loop = 0; loop < frames_to_send; loop++, i++) {
+ 			mbuf = bufs[i];
+ 			if (RTE_MBUF_DIRECT(mbuf)) {
+-- 
+2.14.3
+

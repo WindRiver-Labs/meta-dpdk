@@ -1,0 +1,194 @@
+From 785ab99c75586b0724d46de1ce2d7d78c974fec5 Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Wed, 31 Jan 2018 14:43:10 +0530
+Subject: [PATCH 116/166] rawdev: add attribute get and set
+
+A rawdevice can have various attributes. This patch introduce support
+for transparently setting attribute value or getting current attribute
+state. This is done by allowing an opaque set of key and value to be
+passed through rawdev library.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ lib/librte_rawdev/rte_rawdev.c           | 28 +++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev.h           | 43 ++++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_pmd.h       | 42 +++++++++++++++++++++++++++++++
+ lib/librte_rawdev/rte_rawdev_version.map |  2 ++
+ 4 files changed, 115 insertions(+)
+
+diff --git a/lib/librte_rawdev/rte_rawdev.c b/lib/librte_rawdev/rte_rawdev.c
+index e984303b2149..da6860f545c2 100644
+--- a/lib/librte_rawdev/rte_rawdev.c
++++ b/lib/librte_rawdev/rte_rawdev.c
+@@ -175,6 +175,34 @@ rte_rawdev_queue_release(uint16_t dev_id, uint16_t queue_id)
+ 	return (*dev->dev_ops->queue_release)(dev, queue_id);
+ }
+ 
++int
++rte_rawdev_get_attr(uint16_t dev_id,
++		    const char *attr_name,
++		    uint64_t *attr_value)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->attr_get, -ENOTSUP);
++	return (*dev->dev_ops->attr_get)(dev, attr_name, attr_value);
++}
++
++int
++rte_rawdev_set_attr(uint16_t dev_id,
++		    const char *attr_name,
++		    const uint64_t attr_value)
++{
++	struct rte_rawdev *dev;
++
++	RTE_RAWDEV_VALID_DEVID_OR_ERR_RET(dev_id, -EINVAL);
++	dev = &rte_rawdevs[dev_id];
++
++	RTE_FUNC_PTR_OR_ERR_RET(*dev->dev_ops->attr_set, -ENOTSUP);
++	return (*dev->dev_ops->attr_set)(dev, attr_name, attr_value);
++}
++
+ int
+ rte_rawdev_dump(uint16_t dev_id, FILE *f)
+ {
+diff --git a/lib/librte_rawdev/rte_rawdev.h b/lib/librte_rawdev/rte_rawdev.h
+index 6dde5979e7eb..4617373f193e 100644
+--- a/lib/librte_rawdev/rte_rawdev.h
++++ b/lib/librte_rawdev/rte_rawdev.h
+@@ -319,6 +319,49 @@ struct rte_rawdev_buf {
+ int
+ rte_rawdev_dump(uint16_t dev_id, FILE *f);
+ 
++/**
++ * Get an attribute value from implementation.
++ * Attribute is an opaque handle agreed upon between application and PMD.
++ *
++ * Implementations are expected to maintain an array of attribute-value pairs
++ * based on application calls. Memory management for this structure is
++ * shared responsibility of implementation and application.
++ *
++ * @param dev_id
++ *   The identifier of the device to configure.
++ * @param attr_name
++ *   Opaque object representing an attribute in implementation.
++ * @param attr_value [out]
++ *   Opaque response to the attribute value. In case of error, this remains
++ *   untouched. This is double pointer of void type.
++ * @return
++ *   0 for success
++ *  !0 Error; attr_value remains untouched in case of error.
++ */
++int
++rte_rawdev_get_attr(uint16_t dev_id,
++		    const char *attr_name,
++		    uint64_t *attr_value);
++
++/**
++ * Set an attribute value.
++ * Attribute is an opaque handle agreed upon between application and PMD.
++ *
++ * @param dev_id
++ *   The identifier of the device to configure.
++ * @param attr_name
++ *   Opaque object representing an attribute in implementation.
++ * @param attr_value
++ *   Value of the attribute represented by attr_name
++ * @return
++ *   0 for success
++ *  !0 Error
++ */
++int
++rte_rawdev_set_attr(uint16_t dev_id,
++		    const char *attr_name,
++		    const uint64_t attr_value);
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/librte_rawdev/rte_rawdev_pmd.h b/lib/librte_rawdev/rte_rawdev_pmd.h
+index b903ee226ad8..f05f4c9f8477 100644
+--- a/lib/librte_rawdev/rte_rawdev_pmd.h
++++ b/lib/librte_rawdev/rte_rawdev_pmd.h
+@@ -264,6 +264,43 @@ typedef int (*rawdev_queue_release_t)(struct rte_rawdev *dev,
+  */
+ typedef int (*rawdev_dump_t)(struct rte_rawdev *dev, FILE *f);
+ 
++/**
++ * Get an attribute value from implementation.
++ * Attribute is an opaque handle agreed upon between application and PMD.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param attr_name
++ *   Opaque object representing an attribute in implementation.
++ * @param attr_value [out]
++ *   Opaque response to the attribute value. In case of error, this remains
++ *   untouched. This is double pointer of void type.
++ * @return
++ *   0 for success
++ *  !0 Error; attr_value remains untouched in case of error.
++ */
++typedef int (*rawdev_get_attr_t)(struct rte_rawdev *dev,
++				 const char *attr_name,
++				 uint64_t *attr_value);
++
++/**
++ * Set an attribute value.
++ * Attribute is an opaque handle agreed upon between application and PMD.
++ *
++ * @param dev
++ *   Raw device pointer
++ * @param attr_name
++ *   Opaque object representing an attribute in implementation.
++ * @param attr_value
++ *   Value of the attribute represented by attr_name
++ * @return
++ *   0 for success
++ *  !0 Error
++ */
++typedef int (*rawdev_set_attr_t)(struct rte_rawdev *dev,
++				 const char *attr_name,
++				 const uint64_t attr_value);
++
+ /** Rawdevice operations function pointer table */
+ struct rte_rawdev_ops {
+ 	/**< Get device info. */
+@@ -288,6 +325,11 @@ struct rte_rawdev_ops {
+ 
+ 	/* Dump internal information */
+ 	rawdev_dump_t dump;
++
++	/**< Get an attribute managed by the implementation */
++	rawdev_get_attr_t attr_get;
++	/**< Set an attribute managed by the implementation */
++	rawdev_set_attr_t attr_set;
+ };
+ 
+ /**
+diff --git a/lib/librte_rawdev/rte_rawdev_version.map b/lib/librte_rawdev/rte_rawdev_version.map
+index 64e60d945f6a..d63476e47291 100644
+--- a/lib/librte_rawdev/rte_rawdev_version.map
++++ b/lib/librte_rawdev/rte_rawdev_version.map
+@@ -4,6 +4,7 @@ EXPERIMENTAL {
+ 	rte_rawdev_close;
+ 	rte_rawdev_configure;
+ 	rte_rawdev_count;
++	rte_rawdev_get_attr;
+ 	rte_rawdev_get_dev_id;
+ 	rte_rawdev_info_get;
+ 	rte_rawdev_pmd_allocate;
+@@ -12,6 +13,7 @@ EXPERIMENTAL {
+ 	rte_rawdev_queue_setup;
+ 	rte_rawdev_queue_release;
+ 	rte_rawdev_reset;
++	rte_rawdev_set_attr;
+ 	rte_rawdev_socket_id;
+ 	rte_rawdev_start;
+ 	rte_rawdev_stop;
+-- 
+2.14.3
+

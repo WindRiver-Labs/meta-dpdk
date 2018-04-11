@@ -1,0 +1,34 @@
+From 3ed35e6cbb911527decee61dc776b16cc0b70450 Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 13 Feb 2018 15:27:30 +0530
+Subject: [PATCH 128/166] crypto/dpaa_sec: fix incorrect NULL check
+
+Fixes: c3e85bdcc6e6 ("crypto/dpaa_sec: add crypto driver for NXP DPAA platform")
+Cc: akhil.goyal@nxp.com
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ drivers/crypto/dpaa_sec/dpaa_sec.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/crypto/dpaa_sec/dpaa_sec.c b/drivers/crypto/dpaa_sec/dpaa_sec.c
+index b8a3a9dba8af..e0deba6f259a 100644
+--- a/drivers/crypto/dpaa_sec/dpaa_sec.c
++++ b/drivers/crypto/dpaa_sec/dpaa_sec.c
+@@ -2299,11 +2299,12 @@ struct rte_security_ops dpaa_sec_security_ops = {
+ static int
+ dpaa_sec_uninit(struct rte_cryptodev *dev)
+ {
+-	struct dpaa_sec_dev_private *internals = dev->data->dev_private;
++	struct dpaa_sec_dev_private *internals;
+ 
+ 	if (dev == NULL)
+ 		return -ENODEV;
+ 
++	internals = dev->data->dev_private;
+ 	rte_free(dev->security_ctx);
+ 
+ 	/* In case close has been called, internals->ctx_pool would be NULL */
+-- 
+2.14.3
+

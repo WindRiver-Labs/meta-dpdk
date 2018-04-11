@@ -1,0 +1,54 @@
+From 956f1b6236f96b9695ef1a0944012ec7bc027c00 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Wed, 30 Aug 2017 18:56:09 +0530
+Subject: [PATCH 031/166] app/testpmd: add support for loopback config for dpaa
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ app/test-pmd/Makefile  | 4 ++++
+ app/test-pmd/cmdline.c | 7 +++++++
+ 2 files changed, 11 insertions(+)
+
+diff --git a/app/test-pmd/Makefile b/app/test-pmd/Makefile
+index 4993c91849d4..c9f97a01a68e 100644
+--- a/app/test-pmd/Makefile
++++ b/app/test-pmd/Makefile
+@@ -71,6 +71,10 @@ ifeq ($(CONFIG_RTE_LIBRTE_PMD_BOND),y)
+ LDLIBS += -lrte_pmd_bond
+ endif
+ 
++ifeq ($(CONFIG_RTE_LIBRTE_DPAA_PMD),y)
++LDLIBS += -lrte_pmd_dpaa
++endif
++
+ ifeq ($(CONFIG_RTE_LIBRTE_IXGBE_PMD),y)
+ LDLIBS += -lrte_pmd_ixgbe
+ endif
+diff --git a/app/test-pmd/cmdline.c b/app/test-pmd/cmdline.c
+index b3c3f2419ca7..4521b52c0249 100644
+--- a/app/test-pmd/cmdline.c
++++ b/app/test-pmd/cmdline.c
+@@ -89,6 +89,9 @@
+ #include <rte_eth_bond.h>
+ #include <rte_eth_bond_8023ad.h>
+ #endif
++#ifdef RTE_LIBRTE_DPAA_PMD
++#include <rte_pmd_dpaa.h>
++#endif
+ #ifdef RTE_LIBRTE_IXGBE_PMD
+ #include <rte_pmd_ixgbe.h>
+ #endif
+@@ -12624,6 +12627,10 @@ cmd_set_tx_loopback_parsed(
+ 	if (ret == -ENOTSUP)
+ 		ret = rte_pmd_bnxt_set_tx_loopback(res->port_id, is_on);
+ #endif
++#ifdef RTE_LIBRTE_DPAA_PMD
++	if (ret == -ENOTSUP)
++		ret = rte_pmd_dpaa_set_tx_loopback(res->port_id, is_on);
++#endif
+ 
+ 	switch (ret) {
+ 	case 0:
+-- 
+2.14.3
+

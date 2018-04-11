@@ -1,0 +1,1372 @@
+From 854a694433852a28c81e192ba33c328349b73297 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Mon, 19 Feb 2018 12:44:37 +0530
+Subject: [PATCH 137/166] PVT: examples/cmdif: add CMDIF client library
+
+This code has been taken from the FLIb provided by AIOPSL:
+'https://bitbucket.sw.nxp.com/projects/DPAA2/repos/
+aiopsl/browse?at=refs%2Fheads%2Fdevelop'
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ MAINTAINERS                                   |   1 +
+ doc/api/doxy-api-index.md                     |   1 +
+ doc/api/doxy-api.conf                         |   6 +-
+ examples/cmdif/Makefile                       |  21 ++
+ examples/cmdif/lib/Makefile                   |  35 ++++
+ examples/cmdif/lib/client/cmdif_client_flib.c | 271 ++++++++++++++++++++++++++
+ examples/cmdif/lib/client/cmdif_client_flib.h | 100 ++++++++++
+ examples/cmdif/lib/client/cmdif_client_gpp.c  | 241 +++++++++++++++++++++++
+ examples/cmdif/lib/client/fsl_cmdif_client.h  | 212 ++++++++++++++++++++
+ examples/cmdif/lib/client/fsl_cmdif_flib_c.h  | 205 +++++++++++++++++++
+ examples/cmdif/lib/cmdif.h                    |  47 +++++
+ examples/cmdif/lib/fsl_cmdif_flib_fd.h        | 107 ++++++++++
+ 12 files changed, 1245 insertions(+), 2 deletions(-)
+ create mode 100644 examples/cmdif/Makefile
+ create mode 100644 examples/cmdif/lib/Makefile
+ create mode 100644 examples/cmdif/lib/client/cmdif_client_flib.c
+ create mode 100644 examples/cmdif/lib/client/cmdif_client_flib.h
+ create mode 100644 examples/cmdif/lib/client/cmdif_client_gpp.c
+ create mode 100644 examples/cmdif/lib/client/fsl_cmdif_client.h
+ create mode 100644 examples/cmdif/lib/client/fsl_cmdif_flib_c.h
+ create mode 100644 examples/cmdif/lib/cmdif.h
+ create mode 100644 examples/cmdif/lib/fsl_cmdif_flib_fd.h
+
+diff --git a/MAINTAINERS b/MAINTAINERS
+index 013f39fe8892..7414c403a38b 100644
+--- a/MAINTAINERS
++++ b/MAINTAINERS
+@@ -721,6 +721,7 @@ DPAA2 CMDIF
+ M: Nipun Gupta <nipun.gupta@nxp.com>
+ F: drivers/raw/dpaa2_cmdif/
+ F: doc/guides/rawdevs/dpaa2_cmdif.rst
++F: examples/cmdif/
+ 
+ Packet processing
+ -----------------
+diff --git a/doc/api/doxy-api-index.md b/doc/api/doxy-api-index.md
+index 8117d4c98e60..dc8444012664 100644
+--- a/doc/api/doxy-api-index.md
++++ b/doc/api/doxy-api-index.md
+@@ -64,6 +64,7 @@ The public API headers are grouped by topics:
+   [dpaa]               (@ref rte_pmd_dpaa.h),
+   [dpaa2]              (@ref rte_dpaa2_mempool.h),
+   [dpaa2_cmdif]        (@ref rte_pmd_dpaa2_cmdif.h),
++  [dpaa2_cmdif_client] (@ref fsl_cmdif_client.h),
+   [crypto_scheduler]   (@ref rte_cryptodev_scheduler.h)
+ 
+ - **memory**:
+diff --git a/doc/api/doxy-api.conf b/doc/api/doxy-api.conf
+index bcd91f9c36e7..668c2eb0485d 100644
+--- a/doc/api/doxy-api.conf
++++ b/doc/api/doxy-api.conf
+@@ -79,9 +79,11 @@ INPUT                   = doc/api/doxy-api-index.md \
+                           lib/librte_security \
+                           lib/librte_table \
+                           lib/librte_timer \
+-                          lib/librte_vhost
++                          lib/librte_vhost \
++                          examples/cmdif/lib/client
+ FILE_PATTERNS           = rte_*.h \
+-                          cmdline.h
++                          cmdline.h \
++                          fsl_cmdif_client.h
+ PREDEFINED              = __DOXYGEN__ \
+                           __attribute__(x)=
+ 
+diff --git a/examples/cmdif/Makefile b/examples/cmdif/Makefile
+new file mode 100644
+index 000000000000..c2261ee74a8d
+--- /dev/null
++++ b/examples/cmdif/Makefile
+@@ -0,0 +1,21 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2018 NXP
++
++ifeq ($(RTE_SDK),)
++$(error "Please define RTE_SDK environment variable")
++endif
++
++# Default target, can be overwritten by command line or environment
++RTE_TARGET ?= arm64-dpaa2-linuxapp-gcc
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++ifneq ($(CONFIG_RTE_EXEC_ENV),"linuxapp")
++$(info This application can only operate in a linuxapp environment, \
++please change the definition of the RTE_TARGET environment variable)
++else
++
++DIRS-y += lib
++endif
++
++include $(RTE_SDK)/mk/rte.extsubdir.mk
+diff --git a/examples/cmdif/lib/Makefile b/examples/cmdif/lib/Makefile
+new file mode 100644
+index 000000000000..6ab1a6d25b69
+--- /dev/null
++++ b/examples/cmdif/lib/Makefile
+@@ -0,0 +1,35 @@
++# SPDX-License-Identifier: BSD-3-Clause
++# Copyright 2018 NXP
++
++ifeq ($(RTE_SDK),)
++$(error "Please define RTE_SDK environment variable")
++endif
++
++# Default target, can be overwritten by command line or environment
++RTE_TARGET ?= x86_64-native-linuxapp-gcc
++
++include $(RTE_SDK)/mk/rte.vars.mk
++
++ifneq ($(CONFIG_RTE_EXEC_ENV),"linuxapp")
++$(error This application can only operate in a linuxapp environment, \
++please change the definition of the RTE_TARGET environment variable)
++endif
++
++# library name
++LIB = librte_cmdif.a
++
++LIBABIVER := 1
++
++# all source are stored in SRC-Y
++SRCS-y += client/cmdif_client_flib.c
++SRCS-y += client/cmdif_client_gpp.c
++
++CFLAGS += -O3
++CFLAGS += $(WERROR_FLAGS)
++CFLAGS += -I$(RTE_SDK)/examples/cmdif/lib
++CFLAGS += -I$(RTE_SDK)/examples/cmdif/lib/client
++
++LDLIBS += -lrte_eal
++LDLIBS += -lrte_rawdev
++
++include $(RTE_SDK)/mk/rte.extlib.mk
+diff --git a/examples/cmdif/lib/client/cmdif_client_flib.c b/examples/cmdif/lib/client/cmdif_client_flib.c
+new file mode 100644
+index 000000000000..47162b9c8d3c
+--- /dev/null
++++ b/examples/cmdif/lib/client/cmdif_client_flib.c
+@@ -0,0 +1,271 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#include <cmdif.h>
++#include <fsl_cmdif_flib_c.h>
++#include <cmdif_client_flib.h>
++
++#define IS_VLD_OPEN_SIZE(SIZE) \
++	((SIZE) >= CMDIF_OPEN_SIZEOF)
++
++/** Server special command indication */
++#define SPECIAL_CMD	0xC000
++
++/** Blocking commands don't need response FD */
++#define SYNC_CMD(CMD)	\
++	(!((CMD) & (CMDIF_NORESP_CMD | CMDIF_ASYNC_CMD)) || (CMD & SPECIAL_CMD))
++
++
++int
++cmdif_is_sync_cmd(uint16_t cmd_id)
++{
++	return SYNC_CMD(cmd_id);
++}
++
++int
++cmdif_open_cmd(struct cmdif_desc *cidesc,
++	       const char *m_name,
++	       uint8_t instance_id,
++	       uint8_t *v_data,
++	       uint64_t p_data,
++	       uint32_t size,
++	       struct cmdif_fd *fd)
++{
++	uint64_t p_addr = 0;
++	int      i = 0;
++	union  cmdif_data *v_addr = NULL;
++	struct cmdif_dev  *dev = NULL;
++
++#ifdef DEBUG
++	/*
++	 * if cidesc->dev != NULL it's ok,
++	 * it's useful to keep it in order to let user to free this buffer
++	 */
++	if ((m_name == NULL)
++		|| (cidesc == NULL)
++		|| (v_data == NULL)
++		|| (p_data == 0)
++		|| (p_data & 0x7) /* must be 8 byte aligned */
++		|| ((uint64_t)v_data & 0x7))/* must be 8 byte aligned */
++		return -EINVAL;
++#endif
++
++	if (!IS_VLD_OPEN_SIZE(size))
++		return -ENOMEM;
++
++	memset(v_data, 0, size);
++
++	p_addr = p_data + sizeof(struct cmdif_dev);
++	v_addr = (union cmdif_data *)(v_data + sizeof(struct cmdif_dev));
++
++	fd->u_flc.flc          = 0;
++	fd->u_flc.open.cmid    = CPU_TO_SRV16(CMD_ID_OPEN);
++	fd->u_flc.open.auth_id = CPU_TO_SRV16(OPEN_AUTH_ID);
++	fd->u_flc.open.inst_id = instance_id;
++	fd->u_flc.open.epid    = CPU_TO_BE16(CMDIF_EPID); /* Used by HW */
++	fd->u_frc.frc          = 0;
++	fd->u_addr.d_addr      = p_addr;
++	fd->d_size             = sizeof(union cmdif_data);
++
++	dev = (struct cmdif_dev *)v_data;
++	dev->sync_done = v_addr;
++	cidesc->dev    = (void *)dev;
++
++	v_addr->send.done = 0;
++	/* 8 characters module name terminated by \0*/
++	while ((m_name[i] != '\0') && (i < M_NAME_CHARS)) {
++		v_addr->send.m_name[i] = m_name[i];
++		i++;
++	}
++	if (i < M_NAME_CHARS)
++		v_addr->send.m_name[i] = '\0';
++
++	/* This is required because flc is a struct */
++	fd->u_flc.flc = CPU_TO_BE64(fd->u_flc.flc);
++
++	return 0;
++}
++
++int
++cmdif_sync_ready(struct cmdif_desc *cidesc)
++{
++	struct cmdif_dev *dev = NULL;
++
++#ifdef DEBUG
++	if ((cidesc == NULL) || (cidesc->dev == NULL) ||
++		(((struct cmdif_dev *)cidesc->dev)->sync_done == NULL))
++		return 0; /* Don't use POSIX on purpose */
++#endif
++
++	dev = (struct cmdif_dev *)cidesc->dev;
++
++	return ((union  cmdif_data *)(dev->sync_done))->resp.done;
++}
++
++int
++cmdif_sync_cmd_done(struct cmdif_desc *cidesc)
++{
++	struct cmdif_dev *dev = NULL;
++	int    err = 0;
++
++#ifdef DEBUG
++	if ((cidesc == NULL) || (cidesc->dev == NULL) ||
++		(((struct cmdif_dev *)cidesc->dev)->sync_done == NULL))
++		return -EINVAL;
++#endif
++
++	dev = (struct cmdif_dev *)cidesc->dev;
++	err = ((union  cmdif_data *)(dev->sync_done))->resp.err;
++	((union  cmdif_data *)(dev->sync_done))->resp.done = 0;
++
++	return err;
++}
++
++int
++cmdif_open_done(struct cmdif_desc *cidesc)
++{
++	struct cmdif_dev *dev = NULL;
++
++#ifdef DEBUG
++	if ((cidesc == NULL) || (cidesc->dev == NULL) ||
++		(((struct cmdif_dev *)cidesc->dev)->sync_done == NULL))
++		return -EINVAL;
++#endif
++
++	dev = (struct cmdif_dev *)cidesc->dev;
++	dev->auth_id = ((union  cmdif_data *)(dev->sync_done))->resp.auth_id;
++
++	return cmdif_sync_cmd_done(cidesc);
++}
++
++int
++cmdif_close_cmd(struct cmdif_desc *cidesc, struct cmdif_fd *fd)
++{
++	struct cmdif_dev *dev = NULL;
++
++#ifdef DEBUG
++	if ((cidesc == NULL) || (cidesc->dev == NULL))
++		return -EINVAL;
++#endif
++
++	dev = (struct cmdif_dev *)cidesc->dev;
++
++	fd->u_addr.d_addr       = 0;
++	fd->d_size              = 0;
++	fd->u_flc.flc           = 0;
++	fd->u_flc.close.cmid    = CPU_TO_SRV16(CMD_ID_CLOSE);
++	fd->u_flc.close.auth_id = dev->auth_id;
++	fd->u_flc.close.epid    = CPU_TO_BE16(CMDIF_EPID); /* Used by HW */
++
++	/* This is required because flc is a struct */
++	fd->u_flc.flc = CPU_TO_BE64(fd->u_flc.flc);
++
++	return 0;
++}
++
++int
++cmdif_close_done(struct cmdif_desc *cidesc)
++{
++	return cmdif_sync_cmd_done(cidesc);
++}
++
++static inline void
++async_cb_get(struct cmdif_fd *fd, cmdif_cb_t **async_cb,
++	     void **async_ctx)
++{
++	void *async_data = (void *)CMDIF_ASYNC_ADDR_GET(fd->u_addr.d_addr,
++							fd->d_size);
++	struct cmdif_async temp;
++
++	memcpy(&temp, async_data, sizeof(temp));
++
++	*async_cb  = (cmdif_cb_t *)temp.async_cb;
++	*async_ctx = (void *)temp.async_ctx;
++
++}
++
++static inline void
++async_cb_set(struct cmdif_fd *fd,
++	     cmdif_cb_t *async_cb, void *async_ctx)
++{
++	void *async_data = (void *)CMDIF_ASYNC_ADDR_GET(fd->u_addr.d_addr,
++							fd->d_size);
++	struct cmdif_async temp;
++
++	temp.async_cb = (uint64_t)async_cb;
++	temp.async_ctx = (uint64_t)async_ctx;
++
++	memcpy(async_data, &temp, sizeof(temp));
++}
++
++int
++cmdif_cmd(struct cmdif_desc *cidesc,
++	  uint16_t cmd_id,
++	  uint32_t size,
++	  uint64_t data,
++	  cmdif_cb_t *async_cb,
++	  void *async_ctx,
++	  struct cmdif_fd *fd)
++{
++	struct cmdif_dev *dev = NULL;
++
++#ifdef DEBUG
++	if ((cidesc == NULL) || (cidesc->dev == NULL))
++		return -EINVAL;
++	if ((cmd_id & CMDIF_ASYNC_CMD) && (size < sizeof(struct cmdif_async)))
++		return -EINVAL;
++	if ((data == 0) && (size > 0))
++		return -EINVAL;
++#endif
++
++	dev = (struct cmdif_dev *)cidesc->dev;
++
++	if (cmd_id & CMDIF_ASYNC_CMD) {
++		CMDIF_CMD_FD_SET(fd, dev, data,
++			(size - sizeof(struct cmdif_async)), cmd_id);
++		async_cb_set(fd, async_cb, async_ctx);
++	} else {
++		CMDIF_CMD_FD_SET(fd, dev, data, size, cmd_id);
++	}
++
++	return 0;
++}
++
++int
++cmdif_async_cb(struct cmdif_fd *fd)
++{
++	cmdif_cb_t *async_cb      = NULL;
++	void       *async_ctx     = NULL;
++	uint16_t   cmd_id         = 0;
++
++#ifdef DEBUG
++	if (fd == NULL)
++		return -EINVAL;
++#endif
++
++	/*
++	 * This is required because flc is a struct but HW treats it as
++	 * 8 byte LE.
++	 * Therefore if CPU is LE which means that swap is not done
++	 * by QMAN driver, we need to do it here
++	 */
++	fd->u_flc.flc = CPU_TO_BE64(fd->u_flc.flc);
++	cmd_id = CPU_TO_SRV16(fd->u_flc.cmd.cmid);
++
++#ifdef DEBUG
++	if (!(cmd_id & CMDIF_ASYNC_CMD) || (fd->u_addr.d_addr == 0))
++		return -EINVAL;
++#endif
++
++	async_cb_get(fd, &async_cb, &async_ctx);
++
++	if (async_cb == NULL)
++		return -EINVAL;
++
++	return async_cb(async_ctx,
++		fd->u_flc.cmd.err,
++		cmd_id,
++		fd->d_size,
++		(fd->d_size ? (void *)fd->u_addr.d_addr : NULL));
++}
+diff --git a/examples/cmdif/lib/client/cmdif_client_flib.h b/examples/cmdif/lib/client/cmdif_client_flib.h
+new file mode 100644
+index 000000000000..9b34facf5f84
+--- /dev/null
++++ b/examples/cmdif/lib/client/cmdif_client_flib.h
+@@ -0,0 +1,100 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __CMDIF_CLIENT_FLIB_H__
++#define __CMDIF_CLIENT_FLIB_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <fsl_cmdif_client.h>
++
++/* Common settings for Server and Client */
++#define CMD_ID_OPEN        0x8000
++#define CMD_ID_CLOSE       0x4000
++#define OPEN_AUTH_ID       0xFFFF
++#define M_NAME_CHARS       8
++#define CMDIF_OPEN_SIZEOF (sizeof(struct cmdif_dev) + sizeof(union cmdif_data))
++
++#define CMDIF_DEV_SET(FD, PTR) \
++	do { \
++		(FD)->u_flc.cmd.dev_h = \
++		(uint8_t)((((uint64_t)(PTR)) & 0xFF00000000) >> 32); \
++		(FD)->u_frc.cmd.dev_l = ((uint32_t)((uint64_t)(PTR))); \
++	} while (0)
++
++#define CMDIF_DEV_GET(FD) \
++	((struct cmdif_dev *)((uint64_t)(((uint64_t)((FD)->u_frc.cmd.dev_l)) \
++		| (((uint64_t)((FD)->u_flc.cmd.dev_h)) << 32))))
++
++#define CMDIF_ASYNC_ADDR_GET(DATA, SIZE) \
++		((uint64_t)(DATA) + (SIZE))
++
++#define CMDIF_DEV_RESERVED_BYTES 12
++
++#define CMDIF_CMD_FD_SET(FD, DEV, DATA, SIZE, CMD) \
++	do { \
++		(FD)->u_addr.d_addr     = DATA; \
++		(FD)->d_size            = (SIZE); \
++		(FD)->u_flc.flc         = 0; \
++		(FD)->u_flc.cmd.auth_id = (DEV)->auth_id; \
++		(FD)->u_flc.cmd.cmid    = CPU_TO_SRV16(CMD); \
++		(FD)->u_flc.cmd.epid    = CPU_TO_BE16(CMDIF_EPID); \
++		CMDIF_DEV_SET((FD), (DEV)); \
++		(FD)->u_flc.flc = CPU_TO_BE64((FD)->u_flc.flc); \
++	} while (0)
++
++/** Structure to hold the asynch context data */
++struct cmdif_async {
++	/** Pointer to asynchronous callback */
++	uint64_t async_cb;
++	/** Pointer to asynchronous context */
++	uint64_t async_ctx;
++};
++
++/**
++ * The command interface device
++ *
++ * Order of the open buffer is:
++ * 1) struct cmdif_dev
++ * 2) union cmdif_data
++ * Do not change those structures because of possible unaligned memory accesses
++ */
++struct cmdif_dev {
++	/** Physical address of sync_done */
++	uint64_t   p_sync_done;
++	/** 4 bytes to be used for synchronous commands */
++	void       *sync_done;
++	/** Authentication ID to be used for session with server*/
++	uint16_t   auth_id;
++	uint8_t    reserved[CMDIF_DEV_RESERVED_BYTES];
++};
++
++/**
++ * FD[ADDR] content of the buffer to be sent with open command
++ * when sending to AIOP server
++ */
++union cmdif_data {
++	struct {
++		/** Reserved for done on response */
++		uint8_t done;
++		/** Module name that was registered */
++		char m_name[M_NAME_CHARS];
++	} send;
++	struct {
++		/** Reserved for done on response */
++		uint8_t  done;
++		/** Reserved for done on response */
++		int8_t   err;
++		/** New authentication id */
++		uint16_t auth_id;
++	} resp;
++};
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __CMDIF_CLIENT_FLIB_H__ */
+diff --git a/examples/cmdif/lib/client/cmdif_client_gpp.c b/examples/cmdif/lib/client/cmdif_client_gpp.c
+new file mode 100644
+index 000000000000..5c3b57d3812a
+--- /dev/null
++++ b/examples/cmdif/lib/client/cmdif_client_gpp.c
+@@ -0,0 +1,241 @@
++/* SPDX-License-Identifier: BSD-3-Clause
++ * Copyright 2018 NXP
++ */
++
++#include <stdint.h>
++#include <stdio.h>
++#include <unistd.h>
++#include <errno.h>
++
++#include <rte_log.h>
++#include <rte_rawdev.h>
++#include <rte_pmd_dpaa2_cmdif.h>
++
++#include <fsl_cmdif_client.h>
++#include <fsl_cmdif_flib_c.h>
++#include <cmdif.h>
++
++/* Default 10 milli-second wait for CMDIF sync commands */
++static uint64_t cmdif_client_sync_wait_interval = 10000;
++/* Default max 1000 tries (polls) for CMDIF sync commands */
++static uint64_t cmdif_client_sync_num_tries = 1000;
++
++void
++cmdif_sync_set_timeout_params(uint64_t wait_interval_us,
++			      uint64_t num_tries)
++{
++	cmdif_client_sync_wait_interval = wait_interval_us;
++	cmdif_client_sync_num_tries = num_tries;
++}
++
++
++int
++cmdif_open(struct cmdif_desc *cidesc,
++	   const char *module_name,
++	   uint8_t instance_id,
++	   void *data,
++	   uint32_t size)
++{
++	struct rte_dpaa2_cmdif_context cmdif_send_cnxt;
++	uint64_t dpci_devid = (uint64_t)(cidesc->regs);
++	struct rte_rawdev_buf buf, *send_buf = &buf;
++	struct cmdif_fd fd;
++	int err = 0;
++	uint64_t t = 0;
++	int resp = 0;
++
++	err = cmdif_open_cmd(cidesc, module_name, instance_id, data,
++			(uint64_t)(data), size, &fd);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif_open_cmd failed with err: %d\n",
++			err);
++		return err;
++	}
++
++	buf.buf_addr = (void *)fd.u_addr.d_addr;
++	cmdif_send_cnxt.size = fd.d_size;
++	cmdif_send_cnxt.frc = fd.u_frc.frc;
++	cmdif_send_cnxt.flc = fd.u_flc.flc;
++	cmdif_send_cnxt.priority = CMDIF_PRI_LOW;
++
++	err = rte_rawdev_enqueue_buffers((uint16_t)(dpci_devid),
++		&send_buf, 1, &cmdif_send_cnxt);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "enqueue of buffer failed\n");
++		return err;
++	}
++
++	/* Wait for response from Server */
++	do {
++		resp = cmdif_sync_ready(cidesc);
++		if (resp == 0)
++			usleep(cmdif_client_sync_wait_interval);
++		t++;
++	} while ((resp == 0) && (t < cmdif_client_sync_num_tries));
++	if (t == cmdif_client_sync_num_tries) {
++		RTE_LOG(ERR, CMDIF, "cmdif_sync_ready reached timeout value\n");
++		return -ETIMEDOUT;
++	}
++
++	err = cmdif_open_done(cidesc);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif_open_done failed with err: %d\n",
++			err);
++		return err;
++	}
++
++	return 0;
++}
++
++int
++cmdif_close(struct cmdif_desc *cidesc)
++{
++	struct rte_dpaa2_cmdif_context cmdif_send_cnxt;
++	uint64_t dpci_devid = (uint64_t)(cidesc->regs);
++	struct rte_rawdev_buf buf, *send_buf = &buf;
++	struct cmdif_fd fd;
++	int err = 0;
++	uint64_t t = 0;
++	int resp = 0;
++
++	err = cmdif_close_cmd(cidesc, &fd);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif_close_cmd failed with err: %d\n",
++			err);
++		return err;
++	}
++
++	buf.buf_addr = (void *)fd.u_addr.d_addr;
++	cmdif_send_cnxt.size = fd.d_size;
++	cmdif_send_cnxt.frc = fd.u_frc.frc;
++	cmdif_send_cnxt.flc = fd.u_flc.flc;
++	cmdif_send_cnxt.priority = CMDIF_PRI_LOW;
++
++	err = rte_rawdev_enqueue_buffers((uint16_t)(dpci_devid),
++		&send_buf, 1, &cmdif_send_cnxt);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "enqueue of buffer failed\n");
++		return err;
++	}
++
++	/* Wait for response from Server */
++	do {
++		resp = cmdif_sync_ready(cidesc);
++		if (resp == 0)
++			usleep(cmdif_client_sync_wait_interval);
++		t++;
++	} while ((resp == 0) && (t < cmdif_client_sync_num_tries));
++	if (t == cmdif_client_sync_num_tries) {
++		RTE_LOG(ERR, CMDIF, "cmdif_sync_ready reached timeout value\n");
++		return err;
++	}
++
++	err = cmdif_close_done(cidesc);
++	if (err)
++		RTE_LOG(ERR, CMDIF, "cmdif_close_done failed with err: %d\n",
++			err);
++
++	return 0;
++}
++
++int
++cmdif_send(struct cmdif_desc *cidesc,
++	   uint16_t cmd_id,
++	   uint32_t size,
++	   int priority,
++	   uint64_t data,
++	   cmdif_cb_t *async_cb,
++	   void *async_ctx)
++{
++	struct rte_dpaa2_cmdif_context cmdif_send_cnxt;
++	uint64_t dpci_devid = (uint64_t)(cidesc->regs);
++	struct rte_rawdev_buf buf, *send_buf = &buf;
++	struct cmdif_fd fd;
++	uint64_t t = 0;
++	int err = 0;
++	int resp = 0;
++
++	err = cmdif_cmd(cidesc, cmd_id, size, data, async_cb, async_ctx, &fd);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "cmdif_cmd failed with err: %d\n",
++			err);
++		return err;
++	}
++
++	buf.buf_addr = (void *)fd.u_addr.d_addr;
++	cmdif_send_cnxt.size = fd.d_size;
++	cmdif_send_cnxt.frc = fd.u_frc.frc;
++	cmdif_send_cnxt.flc = fd.u_flc.flc;
++	cmdif_send_cnxt.priority = priority;
++
++	err = rte_rawdev_enqueue_buffers((uint16_t)(dpci_devid),
++		&send_buf, 1, &cmdif_send_cnxt);
++	if (err) {
++		RTE_LOG(ERR, CMDIF, "enqueue of buffer failed\n");
++		return err;
++	}
++
++	if (cmdif_is_sync_cmd(cmd_id)) {
++		/* Wait for response from Server */
++		do {
++			resp = cmdif_sync_ready(cidesc);
++			if (resp == 0)
++				usleep(cmdif_client_sync_wait_interval);
++			t++;
++		} while ((resp == 0) && (t < cmdif_client_sync_num_tries));
++		if (t == cmdif_client_sync_num_tries) {
++			RTE_LOG(ERR, CMDIF, "cmdif_sync_ready reached timeout value\n");
++			return -ETIMEDOUT;
++		}
++		err = cmdif_sync_cmd_done(cidesc);
++		if (err) {
++			RTE_LOG(ERR, CMDIF, "cmdif_sync_cmd_done failed with err: %d\n",
++				err);
++			return err;
++		}
++
++	}
++
++	return 0;
++}
++
++int
++cmdif_resp_read(struct cmdif_desc *cidesc, int priority)
++{
++	struct rte_dpaa2_cmdif_context cmdif_rcv_cnxt;
++	uint64_t dpci_devid = (uint64_t)(cidesc->regs);
++	struct rte_rawdev_buf buf, *recv_buf = &buf;
++	struct cmdif_fd fd;
++	int err = 0, num_pkts;
++
++	if (cidesc == NULL)
++		return -EINVAL;
++
++	cmdif_rcv_cnxt.priority = priority;
++	num_pkts = rte_rawdev_dequeue_buffers((uint16_t)(dpci_devid),
++		&recv_buf, 1, &cmdif_rcv_cnxt);
++	if (num_pkts < 0) {
++		RTE_LOG(ERR, CMDIF, "Error calling buffer dequeue\n");
++		return num_pkts;
++	}
++	while (num_pkts > 0) {
++		fd.u_addr.d_addr = (uint64_t)buf.buf_addr;
++		fd.d_size = cmdif_rcv_cnxt.size;
++		fd.u_frc.frc = cmdif_rcv_cnxt.frc;
++		fd.u_flc.flc = cmdif_rcv_cnxt.flc;
++
++		err = cmdif_async_cb(&fd);
++		if (err) {
++			RTE_LOG(ERR, CMDIF, "Error calling cmdif_async_cb\n");
++			return err;
++		}
++		num_pkts = rte_rawdev_dequeue_buffers((uint16_t)(dpci_devid),
++			&recv_buf, 1, &cmdif_rcv_cnxt);
++		if (num_pkts < 0) {
++			RTE_LOG(ERR, USER1, "Error calling buffer dequeue\n");
++			return num_pkts;
++		}
++	}
++
++	return 0;
++}
+diff --git a/examples/cmdif/lib/client/fsl_cmdif_client.h b/examples/cmdif/lib/client/fsl_cmdif_client.h
+new file mode 100644
+index 000000000000..9f7d0e4641a5
+--- /dev/null
++++ b/examples/cmdif/lib/client/fsl_cmdif_client.h
+@@ -0,0 +1,212 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __FSL_CMDIF_CLIENT_H__
++#define __FSL_CMDIF_CLIENT_H__
++
++/**
++ * @file
++ *
++ * CMDIF Client specific API's
++ *
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++/** Low Priority */
++#define CMDIF_PRI_LOW		0
++/** High Priority */
++#define CMDIF_PRI_HIGH		1
++
++/** Bit to be used for cmd_id to identify asynchronous commands */
++#define CMDIF_ASYNC_CMD		0x2000
++/** Bit to be used for commands that don't need response */
++#define CMDIF_NORESP_CMD	0x1000
++
++/** Memory size required by cmdif_open() */
++#define CMDIF_OPEN_SIZE		64
++
++/* Additional space required for async commands */
++#define CMDIF_ASYNC_OVERHEAD 16
++
++/** Command interface descriptor. */
++struct cmdif_desc {
++	/**
++	 * Pointer to transport layer device for sending commands;
++	 * On GPP the user should pass DPAA2 device (a separate DPAA2 device
++	 * for each descriptor).
++	 * On AIOP the user should pass dpci_id as known by GPP SW context
++	 * Must be set by the user.
++	 */
++	void *regs;
++	/**
++	 * Opaque handle for the use of the command interface;
++	 * user should not modify it.
++	 */
++	void *dev;
++};
++
++/**
++ * Command callback.
++ *
++ * User provides this function. Driver invokes it for all asynchronous commands
++ * that had been sent through cidesc.
++ *
++ * Please make sure to modify only size bytes of the data.
++ * Automatic expansion of the buffer is not available.
++ *
++ * @param async_ctx
++ *   User context that was setup during cmdif_open()
++ * @param err
++ *   Error as returned by server
++ * @param cmd_id
++ *   Id of command
++ * @param size
++ *   Size of the data.
++ *   On the AIOP side use PRC_GET_SEGMENT_LENGTH() to determine the
++ *   size of presented data.
++ * @param data
++ *   Data of the command.
++ *   On the AIOP side it is the pointer to segment presentation
++ *   address; use fdma_modify_default_segment_data() if needed.
++ *   On GPP side it should be virtual address that belongs
++ *   to current SW context.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++typedef int (cmdif_cb_t)(void *async_ctx,
++			 int err,
++			 uint16_t cmd_id,
++			 uint32_t size,
++			 void *data);
++
++/**
++ * Set the timeout parameters for CMDIF sync command.
++ *
++ * @param wait_interval_us
++ *   wait interval in micro-seconds
++ * @param num_tries
++ *   number of tries to poll for sync command completion
++ */
++void cmdif_sync_set_timeout_params(uint64_t wait_interval_us,
++				   uint64_t num_tries);
++
++/**
++ * Open command interface device for the specified module
++ *
++ * @param cidesc
++ *   Command interface descriptor, cmdif device will
++ *   be returned inside this descriptor.
++ *   Sharing of the same cidesc by multiple threads requires locks
++ *   outside CMDIF API, as an alternative each thread can open it's
++ *   own session by calling cmdif_open().
++ *   Only cidesc.regs must be set by user see struct cmdif_desc.
++ * @param module_name
++ *   Module name, up to 8 characters.
++ * @param instance_id
++ *   Instance id which will be passed to #open_cb_t
++ * @param data
++ *   8 bytes aligned buffer for internal use of the
++ *   command interface.
++ *   This address should be accessible by Server and Client.
++ *   This buffer can be freed only after cmdif_close().
++ *   On AIOP, set data as NULL.
++ * @param size
++ *   Size of the data buffer. If the size is not
++ *   enough cmdif_open() will return -ENOMEM.
++ *   By default, set it to #CMDIF_OPEN_SIZE bytes.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_open(struct cmdif_desc *cidesc,
++	       const char *module_name,
++	       uint8_t instance_id,
++	       void *data,
++	       uint32_t size);
++
++/**
++ * Close this command interface device and free this instance entry
++ * on the Server.
++ *
++ * It's not yet supported by the AIOP client.
++ *
++ * @param[in] cidesc
++ *   Command interface descriptor which was setup by cmdif_open().
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_close(struct cmdif_desc *cidesc);
++
++/**
++ * Send command to the module device that was created during cmdif_open().
++ *
++ * This function may be activated in synchronous and asynchronous mode.
++ *
++ * @param cidesc
++ *   Command interface descriptor which was setup by cmdif_open().
++ * @param cmd_id
++ *   Id which represent command on the module that was
++ *   registered on Server; Application may use bits 11-0.
++ * @param size
++ *   Size of the data including extra 16 bytes for
++ *   cmdif_cb_t in case of CMDIF_ASYNC_CMD.
++ * @param priority
++ *   High or low priority queue.
++ * @param data
++ *   Data of the command or buffer allocated by user which
++ *   will be used inside command.
++ *   This address should be accessible by Server and Client.
++ *   It should be virtual address that belongs to current SW context.
++ *   In case of asynchronous command last 16 bytes must be reserved
++ *   for cmdif usage.
++ *   On GPP it must be from Write-Back Cacheable and Outer Shareable memory.
++ * @param async_cb
++ *   Callback to be called on response of asynchronous command.
++ * @param async_ctx
++ *   Context to be received with asynchronous command response
++ *   inside async_cb().
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_send(struct cmdif_desc *cidesc,
++	       uint16_t cmd_id,
++	       uint32_t size,
++	       int priority,
++	       uint64_t data,
++	       cmdif_cb_t *async_cb,
++	       void *async_ctx);
++
++/**
++ * Check the response queue for new responses,
++ * de-queue and activate the callback function for each response
++ *
++ * This function is not blocking;
++ * if nothing was found it will return error code.
++ * Note, this functionality is not relevant for AIOP client.
++ * @param cidesc
++ *   Command interface descriptor which was setup by cmdif_open().
++ * @param priority
++ *   High or low priority queue to be checked.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_resp_read(struct cmdif_desc *cidesc, int priority);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __FSL_CMDIF_CLIENT_H__ */
+diff --git a/examples/cmdif/lib/client/fsl_cmdif_flib_c.h b/examples/cmdif/lib/client/fsl_cmdif_flib_c.h
+new file mode 100644
+index 000000000000..53d3a16f1ff7
+--- /dev/null
++++ b/examples/cmdif/lib/client/fsl_cmdif_flib_c.h
+@@ -0,0 +1,205 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __FSL_CMDIF_FLIB_C_H__
++#define __FSL_CMDIF_FLIB_C_H__
++
++/**
++ * @file
++ *
++ * API to be used for FD based command interface implementation
++ *
++ * This is external API that is used to implement the final API as defined at
++ * fsl_cmdif_client.h and fsl_cmdif_server.h. For client and server external use
++ * only the API from fsl_cmdif_client.h and fsl_cmdif_server.h.
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <sys/types.h>
++#include <fsl_cmdif_client.h>
++#include <fsl_cmdif_flib_fd.h>
++
++/**
++ * Build open command.
++ *
++ * Should be used for building frame descriptor for open command.
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ * @param m_name
++ *   Module name, up to 8 characters
++ * @param instance_id
++ *   Instance id which will be passed to open_cb_t
++ * @param v_data
++ *   Core virtual address of the buffer to be used by command interface.
++ *   The core is going to access the buffer through this address.
++ *   This address should be accessible by Server and Client.
++ *   Must be 8 byte aligned.
++ * @param p_data
++ *   Physical address or SMMU virtual address of the
++ *   v_data buffer to be set inside the fd of command.
++ * @param size
++ *   Size of the v_data buffer. If the size if not
++ *   enough cmdif_open() will return -ENOMEM.
++ * @param fd
++ *   Frame descriptor relevant fields for cmdif. This is an
++ *   ouptut parameter created by this API.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_open_cmd(struct cmdif_desc *cidesc,
++		   const char *m_name,
++		   uint8_t instance_id,
++		   uint8_t *v_data,
++		   uint64_t p_data,
++		   uint32_t size,
++		   struct cmdif_fd *fd);
++
++/**
++ * Synchronous/Blocking mode done indication.
++ *
++ * Should be used for implementation of cmdif_send() in synchronous mode.
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ *
++ * @returns
++ *   - '0' if the command is not finished yet;
++ *   - non '0' if it has finished.
++ */
++int cmdif_sync_ready(struct cmdif_desc *cidesc);
++
++/**
++ * Synchronous command done.
++ *
++ * Should be used for implementation of cmdif_send() in synchronous mode.
++ * Should the last call before return inside from cmdif_send().
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_sync_cmd_done(struct cmdif_desc *cidesc);
++
++/**
++ * Open command done.
++ *
++ * Should be used for implementation of cmdif_open().
++ * Should the last call before return inside from cmdif_open().
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_open_done(struct cmdif_desc *cidesc);
++
++/**
++ * Build close command.
++ *
++ * Should be used for building frame descriptor for close command.
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ * @param fd
++ *   Frame descriptor relevant fields for cmdif. This is an out parameter and
++ *   is filled in by cmdif_close_cmd.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_close_cmd(struct cmdif_desc *cidesc, struct cmdif_fd *fd);
++
++/**
++ * Close command done.
++ *
++ * Should be used for implementation of cmdif_close().
++ * Should the last call before return inside from cmdif_close().
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_close_done(struct cmdif_desc *cidesc);
++
++/**
++ * Synchronous/Blocking mode indication.
++ *
++ * Should be used for implementation of cmdif_send() in synchronous mode.
++ *
++ * @param cmd_id
++ *   Command id that was sent
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_is_sync_cmd(uint16_t cmd_id);
++
++/**
++ * Build command.
++ *
++ * Should be used for building frame descriptor for command.
++ *
++ * @param cidesc
++ *   Command interface descriptor
++ * @param cmd_id
++ *   Command id that was sent
++ * @param size
++ *   Size of data
++ * @param data
++ *   Physical address or SMMU virtual address of the
++ *   command buffer to be set inside the fd of the command.
++ * @param async_cb
++ *   Callback to be called on response of asynchronous command.
++ * @param async_ctx
++ *   Context to be received with asynchronous command response
++ *   inside async_cb()
++ * @param fd
++ *   Frame descriptor relevant fields for cmdif. This is an out parameter and
++ *   is filled in by cmdif_close_cmd.
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_cmd(struct cmdif_desc *cidesc,
++	      uint16_t cmd_id,
++	      uint32_t size,
++	      uint64_t data,
++	      cmdif_cb_t *async_cb,
++	      void *async_ctx,
++	      struct cmdif_fd *fd);
++
++/**
++ * Call asynchronous callback of the received frame descriptor
++ *
++ * @param fd
++ *   Pointer to received frame descriptor
++ *
++ * @returns
++ *   - 0: Success.
++ *   - <0: Error code.
++ */
++int cmdif_async_cb(struct cmdif_fd *fd);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __FSL_CMDIF_FLIB_H__ */
+diff --git a/examples/cmdif/lib/cmdif.h b/examples/cmdif/lib/cmdif.h
+new file mode 100644
+index 000000000000..3332b0fc9eb8
+--- /dev/null
++++ b/examples/cmdif/lib/cmdif.h
+@@ -0,0 +1,47 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __CMDIF_H__
++#define __CMDIF_H__
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <errno.h>
++#include <sys/types.h>
++#include <string.h>
++#include <stdlib.h>
++
++#include <rte_log.h>
++
++#include <rte_byteorder.h>
++#include <fsl_cmdif_flib_fd.h>
++
++#define RTE_LOGTYPE_CMDIF RTE_LOGTYPE_USER8
++
++#define CPU_TO_SRV16(val) rte_cpu_to_be_16(val)
++#define CPU_TO_SRV32(val) rte_cpu_to_be_32(val)
++#define CPU_TO_BE64(val)  rte_cpu_to_be_64(val)
++#define CPU_TO_BE16(val)  rte_cpu_to_be_16(val)
++#define CPU_TO_LE64(val)  rte_cpu_to_le_64(val)
++#define CPU_TO_LE32(val)  rte_cpu_to_le_32(val)
++
++/** EPID to be used for setting by client */
++#define CMDIF_EPID	0
++
++#ifdef DPAA2_CMDIF_FLIB_DEBUG
++#ifndef DEBUG
++#define DEBUG
++#endif
++#endif /* DPAA2_CMDIF_FLIB_DEBUG */
++
++#define SHBP_BUF_TO_PTR(BUF) ((uint64_t *)(BUF))
++#define SHBP_PTR_TO_BUF(BUF) ((uint64_t)(BUF))
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __CMDIF_H__ */
+diff --git a/examples/cmdif/lib/fsl_cmdif_flib_fd.h b/examples/cmdif/lib/fsl_cmdif_flib_fd.h
+new file mode 100644
+index 000000000000..a10123904095
+--- /dev/null
++++ b/examples/cmdif/lib/fsl_cmdif_flib_fd.h
+@@ -0,0 +1,107 @@
++/* SPDX-License-Identifier: (BSD-3-Clause OR GPL-2.0)
++ * Copyright 2014-2015 Freescale Semiconductor Inc.
++ */
++
++#ifndef __FSL_CMDIF_FLIB_FD_H__
++#define __FSL_CMDIF_FLIB_FD_H__
++
++/**
++ * @file
++ *
++ * API to be used for FD based command interface implementation.
++ *
++ * This is external API that is used to implement the final API as defined at
++ * fsl_cmdif_client.h and fsl_cmdif_server.h. For client and server external use
++ * only the API from fsl_cmdif_client.h and fsl_cmdif_server.h.
++ */
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#include <sys/types.h>
++
++/**
++ * The following are the FD fields that are used by CMDIF
++ * cmdif_fd.fls, cmdif_fd.frc, cmdif_fd.d_addr, cmdif_fd.d_size
++ * should be copied into real FD
++ */
++struct cmdif_fd {
++	/**
++	 * FD[FLC] Frame descriptor relevant fields as should be set
++	 * by cmdif client side when sending commands to AIOP server
++	 */
++	union {
++		/** Full FLC field */
++		uint64_t flc;
++		/** FLC field for command after the session is open */
++		struct {
++			/** Authentication id */
++			uint16_t auth_id;
++			/** 7 high bits of cmdif_desc.dev */
++			uint8_t dev_h;
++			/** Reserved for error on response*/
++			uint8_t err;
++			/** Command id */
++			uint16_t cmid;
++			/** Reserved fog EPID */
++			uint16_t epid;
++		} cmd;
++		/** FLC field for open command */
++		struct {
++			/** Authentication id */
++			uint16_t auth_id;
++			/** Module instance id*/
++			uint8_t inst_id;
++			uint8_t reserved0;
++			/** Command id */
++			uint16_t cmid;
++			/** Reserved fog EPID */
++			uint16_t epid;
++		} open;
++		/** FLC field for close command */
++		struct {
++			/** Authentication id */
++			uint16_t auth_id;
++			uint8_t reserved[2];
++			/** Command id */
++			uint16_t cmid;
++			/** Reserved fog EPID */
++			uint16_t epid;
++		} close;
++		uint32_t word[2];
++	} u_flc;
++
++	/**
++	 * FD[FRC] Frame descriptor relevant fields as should be set
++	 * by cmdif client side when sending commands to AIOP server
++	 */
++	union  {
++		/** Full FRC field */
++		uint32_t frc;
++		/** FRC field for command after the session is open */
++		struct {
++			/** 32 low bit of cmdif_desc.dev */
++			uint32_t dev_l;
++		} cmd;
++	} u_frc;
++
++	/** Data length */
++	uint32_t d_size;
++
++	/**
++	 * FD[ADDR] Frame descriptor relevant field as should be set
++	 * by cmdif client side when sending commands to AIOP server
++	 */
++	union {
++		/** Data address */
++		uint64_t d_addr;
++		uint32_t word[2];
++	} u_addr;
++};
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* __FSL_CMDIF_FD_H__ */
+-- 
+2.14.3
+

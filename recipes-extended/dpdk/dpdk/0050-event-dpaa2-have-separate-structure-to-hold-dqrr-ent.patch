@@ -1,0 +1,165 @@
+From a8f6e9194f00e0ef307dbaa54be136e710ae06b9 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 16 Jan 2018 00:15:19 +0530
+Subject: [PATCH 050/166] event/dpaa2: have separate structure to hold dqrr
+ entries
+
+This patch provides cleaner approach to store the DQRR entries,
+which are yet to be consumed in case of atomic queues.
+
+Also, this patch changes the storage of the DQRR entry index
+into the mbuf->seqn instead of ev->opaque
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/bus/fslmc/fslmc_bus.c               |  2 ++
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h     |  2 --
+ drivers/bus/fslmc/rte_bus_fslmc_version.map |  1 +
+ drivers/bus/fslmc/rte_fslmc.h               | 18 ++++++++++++++++++
+ drivers/event/dpaa2/dpaa2_eventdev.c        | 25 +++++++++++++------------
+ drivers/mempool/dpaa2/dpaa2_hw_mempool.h    |  2 ++
+ 6 files changed, 36 insertions(+), 14 deletions(-)
+
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index 39478f7f388a..a92b02897107 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -61,6 +61,8 @@ rte_fslmc_get_device_count(enum rte_dpaa2_dev_type device_type)
+ 	return rte_fslmc_bus.device_count[device_type];
+ }
+ 
++RTE_DEFINE_PER_LCORE(struct dpaa2_portal_dqrr, dpaa2_held_bufs);
++
+ static void
+ cleanup_fslmc_device_list(void)
+ {
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index fd9e656c3206..343e2f9aeca0 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -105,8 +105,6 @@ struct dpaa2_dpio_dev {
+ 	struct rte_intr_handle intr_handle; /* Interrupt related info */
+ 	int32_t	epoll_fd; /**< File descriptor created for interrupt polling */
+ 	int32_t hw_id; /**< An unique ID of this DPIO device instance */
+-	uint64_t dqrr_held;
+-	uint8_t dqrr_size;
+ };
+ 
+ struct dpaa2_dpbp_dev {
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index b9dd063a05f3..09ec05f6e82a 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -95,6 +95,7 @@ DPDK_18.02 {
+ 
+ 	dpaa2_svr_family;
+ 	dpaa2_virt_mode;
++	per_lcore_dpaa2_held_bufs;
+ 	qbman_fq_query_state;
+ 	qbman_fq_state_frame_count;
+ 	qbman_swp_dqrr_idx_consume;
+diff --git a/drivers/bus/fslmc/rte_fslmc.h b/drivers/bus/fslmc/rte_fslmc.h
+index e6314b5cb9b6..006d8c37aeab 100644
+--- a/drivers/bus/fslmc/rte_fslmc.h
++++ b/drivers/bus/fslmc/rte_fslmc.h
+@@ -155,6 +155,24 @@ struct rte_fslmc_bus {
+ 				/**< Count of all devices scanned */
+ };
+ 
++#define DPAA2_PORTAL_DEQUEUE_DEPTH	32
++
++/* Create storage for dqrr entries per lcore */
++struct dpaa2_portal_dqrr {
++	struct rte_mbuf *mbuf[DPAA2_PORTAL_DEQUEUE_DEPTH];
++	uint64_t dqrr_held;
++	uint8_t dqrr_size;
++};
++
++RTE_DECLARE_PER_LCORE(struct dpaa2_portal_dqrr, dpaa2_held_bufs);
++
++#define DPAA2_PER_LCORE_DQRR_SIZE \
++	RTE_PER_LCORE(dpaa2_held_bufs).dqrr_size
++#define DPAA2_PER_LCORE_DQRR_HELD \
++	RTE_PER_LCORE(dpaa2_held_bufs).dqrr_held
++#define DPAA2_PER_LCORE_DQRR_MBUF(i) \
++	RTE_PER_LCORE(dpaa2_held_bufs).mbuf[i]
++
+ /**
+  * Register a DPAA2 driver.
+  *
+diff --git a/drivers/event/dpaa2/dpaa2_eventdev.c b/drivers/event/dpaa2/dpaa2_eventdev.c
+index 23727f0b3256..3b82f02cdc08 100644
+--- a/drivers/event/dpaa2/dpaa2_eventdev.c
++++ b/drivers/event/dpaa2/dpaa2_eventdev.c
+@@ -125,13 +125,13 @@ dpaa2_eventdev_enqueue_burst(void *port, const struct rte_event ev[],
+ 			qbman_eq_desc_set_no_orp(&eqdesc[loop], 0);
+ 			qbman_eq_desc_set_response(&eqdesc[loop], 0, 0);
+ 
+-			if (event->impl_opaque) {
+-				uint8_t dqrr_index = event->impl_opaque - 1;
++			if (event->mbuf->seqn) {
++				uint8_t dqrr_index = event->mbuf->seqn - 1;
+ 
+ 				qbman_eq_desc_set_dca(&eqdesc[loop], 1,
+ 						      dqrr_index, 0);
+-				DPAA2_PER_LCORE_DPIO->dqrr_size--;
+-				DPAA2_PER_LCORE_DPIO->dqrr_held &=
++				DPAA2_PER_LCORE_DQRR_SIZE--;
++				DPAA2_PER_LCORE_DQRR_HELD &=
+ 					~(1 << dqrr_index);
+ 			}
+ 
+@@ -233,9 +233,9 @@ static void dpaa2_eventdev_process_atomic(struct qbman_swp *swp,
+ 
+ 	rte_memcpy(ev, ev_temp, sizeof(struct rte_event));
+ 	rte_free(ev_temp);
+-	ev->impl_opaque = dqrr_index + 1;
+-	DPAA2_PER_LCORE_DPIO->dqrr_size++;
+-	DPAA2_PER_LCORE_DPIO->dqrr_held |= 1 << dqrr_index;
++	ev->mbuf->seqn = dqrr_index + 1;
++	DPAA2_PER_LCORE_DQRR_SIZE++;
++	DPAA2_PER_LCORE_DQRR_HELD |= 1 << dqrr_index;
+ }
+ 
+ static uint16_t
+@@ -257,18 +257,19 @@ dpaa2_eventdev_dequeue_burst(void *port, struct rte_event ev[],
+ 			return 0;
+ 		}
+ 	}
+-
+ 	swp = DPAA2_PER_LCORE_PORTAL;
+ 
+ 	/* Check if there are atomic contexts to be released */
+-	while (DPAA2_PER_LCORE_DPIO->dqrr_size) {
+-		if (DPAA2_PER_LCORE_DPIO->dqrr_held & (1 << i)) {
++	while (DPAA2_PER_LCORE_DQRR_SIZE) {
++		if (DPAA2_PER_LCORE_DQRR_HELD & (1 << i)) {
+ 			qbman_swp_dqrr_idx_consume(swp, i);
+-			DPAA2_PER_LCORE_DPIO->dqrr_size--;
++			DPAA2_PER_LCORE_DQRR_SIZE--;
++			DPAA2_PER_LCORE_DQRR_MBUF(i)->seqn =
++				DPAA2_INVALID_MBUF_SEQN;
+ 		}
+ 		i++;
+ 	}
+-	DPAA2_PER_LCORE_DPIO->dqrr_held = 0;
++	DPAA2_PER_LCORE_DQRR_HELD = 0;
+ 
+ 	do {
+ 		dq = qbman_swp_dqrr_next(swp);
+diff --git a/drivers/mempool/dpaa2/dpaa2_hw_mempool.h b/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
+index 0971929ef445..e37dc10ee6f4 100644
+--- a/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
++++ b/drivers/mempool/dpaa2/dpaa2_hw_mempool.h
+@@ -36,6 +36,8 @@
+ 
+ #define DPAA2_MAX_BUF_POOLS	8
+ 
++#define DPAA2_INVALID_MBUF_SEQN	0
++
+ struct buf_pool_cfg {
+ 	void *addr;
+ 	/**< The address from where DPAA2 will carve out the buffers */
+-- 
+2.14.3
+

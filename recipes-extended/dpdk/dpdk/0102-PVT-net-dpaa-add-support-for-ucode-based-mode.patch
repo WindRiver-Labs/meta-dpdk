@@ -1,0 +1,400 @@
+From e4da27202f6984a4c7298ebc6feeec05c32ff1e3 Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 30 Jan 2018 14:32:01 +0530
+Subject: [PATCH 102/166] PVT: net/dpaa: add support for ucode based mode
+
+Signed-off-by: Jun Yang <jun.yang@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/base/qbman/qman.c        |  57 ++++++++++
+ drivers/bus/dpaa/include/fsl_qman.h       |   9 ++
+ drivers/bus/dpaa/rte_bus_dpaa_version.map |   1 +
+ drivers/net/dpaa/dpaa_ethdev.c            |  24 ++--
+ drivers/net/dpaa/dpaa_rxtx.c              | 176 ++++++++++++++++++++++++++++++
+ drivers/net/dpaa/dpaa_rxtx.h              |  10 ++
+ 6 files changed, 270 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/bus/dpaa/base/qbman/qman.c b/drivers/bus/dpaa/base/qbman/qman.c
+index d8181b10fc97..a82dc391aa29 100644
+--- a/drivers/bus/dpaa/base/qbman/qman.c
++++ b/drivers/bus/dpaa/base/qbman/qman.c
+@@ -1215,6 +1215,63 @@ u32 qman_portal_dequeue(struct rte_event ev[], unsigned int poll_limit,
+ 	return limit;
+ }
+ 
++unsigned int qman_portal_ucode_poll_rx(unsigned int poll_limit,
++				 void **bufs,
++				 struct qman_portal *p)
++{
++	struct qm_portal *portal = &p->p;
++	register struct qm_dqrr *dqrr = &portal->dqrr;
++	struct qm_dqrr_entry *dq[QM_DQRR_SIZE], *shadow[QM_DQRR_SIZE];
++	struct qman_fq *fq;
++	unsigned int limit = 0, rx_number = 0;
++	uint32_t consume = 0;
++
++	do {
++		qm_dqrr_pvb_update(&p->p);
++		if (!dqrr->fill)
++			break;
++
++		dq[rx_number] = dqrr->cursor;
++		dqrr->cursor = DQRR_CARRYCLEAR(dqrr->cursor + 1);
++		/* Prefetch the next DQRR entry */
++		rte_prefetch0(dqrr->cursor);
++
++#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
++		/* If running on an LE system the fields of the
++		 * dequeue entry must be swapper.  Because the
++		 * QMan HW will ignore writes the DQRR entry is
++		 * copied and the index stored within the copy
++		 */
++		shadow[rx_number] =
++			&p->shadow_dqrr[DQRR_PTR2IDX(dq[rx_number])];
++		shadow[rx_number]->fd.opaque_addr =
++				dq[rx_number]->fd.opaque_addr;
++		shadow[rx_number]->fd.addr =
++				be40_to_cpu(dq[rx_number]->fd.addr);
++		shadow[rx_number]->fd.opaque =
++				be32_to_cpu(dq[rx_number]->fd.opaque);
++#else
++		shadow = dq;
++#endif
++#ifdef CONFIG_FSL_QMAN_FQ_LOOKUP
++		fq = qman_fq_lookup_table[be32_to_cpu(dq[rx_number]->contextB)];
++#else
++		fq = (void *)(uintptr_t)be32_to_cpu(dq->contextB);
++#endif
++		fq->cb.dqrr_ucode_cb(fq, shadow[rx_number], &bufs[rx_number]);
++		/* SDQCR: context_b points to the FQ */
++		consume |= (1 << (31 - DQRR_PTR2IDX(shadow[rx_number])));
++		rx_number++;
++		--dqrr->fill;
++	} while (++limit < poll_limit);
++
++	/* Consume all the DQRR enries together */
++	/* TODO Check if we can poll for more buffers than the DQRR SIZE */
++	qm_out(DQRR_DCAP, (1 << 8) | consume);
++
++	return rx_number;
++}
++
+ struct qm_dqrr_entry *qman_dequeue(struct qman_fq *fq)
+ {
+ 	struct qman_portal *p = get_affine_portal();
+diff --git a/drivers/bus/dpaa/include/fsl_qman.h b/drivers/bus/dpaa/include/fsl_qman.h
+index 3d3c036e9220..a4e1987bba78 100644
+--- a/drivers/bus/dpaa/include/fsl_qman.h
++++ b/drivers/bus/dpaa/include/fsl_qman.h
+@@ -1170,6 +1170,11 @@ typedef void (*qman_dpdk_pull_cb_dqrr)(struct qman_fq **fq,
+ 					void **bufs,
+ 					int num_bufs);
+ 
++/* This callback type is used when handling ucode processed buffers */
++typedef void (*qman_ucode_rx_cb)(struct qman_fq *fq,
++					struct qm_dqrr_entry *dq,
++					void **bufs);
++
+ typedef void (*qman_dpdk_cb_prepare)(struct qm_dqrr_entry *dq, void **bufs);
+ 
+ /*
+@@ -1234,6 +1239,7 @@ struct qman_fq_cb {
+ 		qman_dpdk_cb_dqrr dqrr_dpdk_cb;
+ 		qman_dpdk_pull_cb_dqrr dqrr_dpdk_pull_cb;
+ 		qman_cb_dqrr dqrr;
++		qman_ucode_rx_cb dqrr_ucode_cb;
+ 	};
+ 	qman_dpdk_cb_prepare dqrr_prepare;
+ 	qman_cb_mr ern;		/* for s/w ERNs */
+@@ -1359,6 +1365,9 @@ u16 qman_affine_channel(int cpu);
+ unsigned int qman_portal_poll_rx(unsigned int poll_limit,
+ 				 void **bufs, struct qman_portal *q);
+ 
++unsigned int qman_portal_ucode_poll_rx(unsigned int poll_limit,
++				 void **bufs, struct qman_portal *q);
++
+ /**
+  * qman_set_vdq - Issue a volatile dequeue command
+  * @fq: Frame Queue on which the volatile dequeue command is issued
+diff --git a/drivers/bus/dpaa/rte_bus_dpaa_version.map b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+index 8d90285436c5..014f75592bdc 100644
+--- a/drivers/bus/dpaa/rte_bus_dpaa_version.map
++++ b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+@@ -83,6 +83,7 @@ DPDK_18.02 {
+ 	qman_oos_fq;
+ 	qman_portal_dequeue;
+ 	qman_portal_poll_rx;
++	qman_portal_ucode_poll_rx;
+ 	qman_query_fq_frm_cnt;
+ 	qman_release_cgrid_range;
+ 	qman_retire_fq;
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index f57fdc33fee9..7abe7647821e 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -196,7 +196,8 @@ dpaa_supported_ptypes_get(struct rte_eth_dev *dev)
+ 
+ 	PMD_INIT_FUNC_TRACE();
+ 
+-	if (dev->rx_pkt_burst == dpaa_eth_queue_rx)
++	if (dev->rx_pkt_burst == dpaa_eth_queue_rx ||
++		dev->rx_pkt_burst == dpaa_eth_ucode_queue_rx)
+ 		return ptypes;
+ 	return NULL;
+ }
+@@ -208,7 +209,10 @@ static int dpaa_eth_dev_start(struct rte_eth_dev *dev)
+ 	PMD_INIT_FUNC_TRACE();
+ 
+ 	/* Change tx callback to the real one */
+-	dev->tx_pkt_burst = dpaa_eth_queue_tx;
++	if (getenv("DPAA_FMAN_UCODE_SUPPORT"))
++		dev->tx_pkt_burst = dpaa_eth_ucode_queue_tx;
++	else
++		dev->tx_pkt_burst = dpaa_eth_queue_tx;
+ 	fman_if_enable_rx(dpaa_intf->fif);
+ 
+ 	return 0;
+@@ -532,8 +536,9 @@ int dpaa_eth_rx_queue_setup(struct rte_eth_dev *dev, uint16_t queue_idx,
+ 		/* In muticore scenario stashing becomes a bottleneck on LS1046.
+ 		 * So do not enable stashing in this case
+ 		 */
+-		if (dpaa_svr_family != SVR_LS1046A_FAMILY)
+-			opts.fqd.context_a.stashing.annotation_cl =
++		if ((dpaa_svr_family != SVR_LS1046A_FAMILY) &&
++			!getenv("DPAA_FMAN_UCODE_SUPPORT"))
++				opts.fqd.context_a.stashing.annotation_cl =
+ 						DPAA_IF_RX_ANNOTATION_STASH;
+ 		opts.fqd.context_a.stashing.data_cl = DPAA_IF_RX_DATA_STASH;
+ 		opts.fqd.context_a.stashing.context_cl =
+@@ -556,7 +561,10 @@ int dpaa_eth_rx_queue_setup(struct rte_eth_dev *dev, uint16_t queue_idx,
+ 		if (ret)
+ 			DPAA_PMD_ERR("Channel/Queue association failed. fqid %d"
+ 				     " ret: %d", rxq->fqid, ret);
+-		rxq->cb.dqrr_dpdk_pull_cb = dpaa_rx_cb;
++		if (getenv("DPAA_FMAN_UCODE_SUPPORT"))
++			rxq->cb.dqrr_ucode_cb = dpaa_ucode_rx_cb;
++		else
++			rxq->cb.dqrr_dpdk_pull_cb = dpaa_rx_cb;
+ 		rxq->cb.dqrr_prepare = dpaa_rx_cb_prepare;
+ 		rxq->is_static = true;
+ 	}
+@@ -1215,8 +1223,10 @@ dpaa_dev_init(struct rte_eth_dev *eth_dev)
+ 
+ 	/* Populate ethdev structure */
+ 	eth_dev->dev_ops = &dpaa_devops;
+-	eth_dev->rx_pkt_burst = dpaa_eth_queue_rx;
+-	eth_dev->tx_pkt_burst = dpaa_eth_tx_drop_all;
++	if (getenv("DPAA_FMAN_UCODE_SUPPORT"))
++		eth_dev->rx_pkt_burst = dpaa_eth_ucode_queue_rx;
++	else
++		eth_dev->rx_pkt_burst = dpaa_eth_queue_rx;
+ 
+ 	/* Allocate memory for storing MAC addresses */
+ 	eth_dev->data->mac_addrs = rte_zmalloc("mac_addr",
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 6d3495683bf5..1fa4785d8207 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -971,3 +971,179 @@ uint16_t dpaa_eth_tx_drop_all(void *q  __rte_unused,
+ 	 */
+ 	return 0;
+ }
++
++static inline struct rte_mbuf *
++dpaa_eth_ucode_fd_to_mbuf(const struct qm_fd *fd, uint32_t ifid)
++{
++	struct dpaa_bp_info *bp_info;
++	struct rte_mbuf *mbuf;
++	void *ptr;
++	uint8_t format =
++		(fd->opaque & DPAA_FD_FORMAT_MASK) >> DPAA_FD_FORMAT_SHIFT;
++
++	DPAA_DP_LOG(DEBUG, " FD--->MBUF");
++
++	if (unlikely(format == qm_fd_sg))
++		return dpaa_eth_sg_to_mbuf(fd, ifid);
++
++	dpaa_display_frame(fd);
++	bp_info = DPAA_BPID_TO_POOL_INFO(fd->bpid);
++	ptr = DPAA_MEMPOOL_PTOV(bp_info, fd->addr);
++	mbuf = (struct rte_mbuf *)((char *)ptr - bp_info->meta_data_size);
++	rte_prefetch0(mbuf);
++	return mbuf;
++}
++
++void
++dpaa_ucode_rx_cb(struct qman_fq *fq, struct qm_dqrr_entry *dq, void **bufs)
++{
++	uint32_t ifid = ((struct dpaa_if *)fq->dpaa_intf)->ifid;
++	*bufs = dpaa_eth_ucode_fd_to_mbuf(&dq->fd, ifid);
++}
++
++static uint16_t
++dpaa_eth_ucode_queue_portal_rx(struct qman_fq *fq,
++			 struct rte_mbuf **bufs,
++			 uint16_t nb_bufs)
++{
++	int ret;
++
++	if (unlikely(fq->qp == NULL)) {
++		ret = rte_dpaa_portal_fq_init((void *)0, fq);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal %d", ret);
++			return 0;
++		}
++	}
++
++	return qman_portal_ucode_poll_rx(nb_bufs, (void **)bufs, fq->qp);
++}
++
++uint16_t
++dpaa_eth_ucode_queue_rx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
++{
++	struct qman_fq *fq = q;
++	struct qm_dqrr_entry *dq;
++	uint32_t num_rx = 0, ifid = ((struct dpaa_if *)fq->dpaa_intf)->ifid;
++	int ret;
++
++	if (likely(fq->is_static))
++		return dpaa_eth_ucode_queue_portal_rx(fq, bufs, nb_bufs);
++
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal");
++			return 0;
++		}
++	}
++
++	ret = qman_set_vdq(fq, (nb_bufs > DPAA_MAX_DEQUEUE_NUM_FRAMES) ?
++				DPAA_MAX_DEQUEUE_NUM_FRAMES : nb_bufs);
++	if (ret)
++		return 0;
++
++	do {
++		dq = qman_dequeue(fq);
++		if (!dq)
++			continue;
++		bufs[num_rx++] = dpaa_eth_ucode_fd_to_mbuf(&dq->fd, ifid);
++		qman_dqrr_consume(fq, dq);
++	} while (fq->flags & QMAN_FQ_STATE_VDQCR);
++
++	return num_rx;
++}
++
++/* Limitation - dpaa_eth_ucode_queue_tx support only single
++ * buffer pool in the system
++ */
++uint16_t
++dpaa_eth_ucode_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
++{
++	struct rte_mbuf *mbuf, *mi = NULL;
++	struct rte_mempool *mp;
++	struct dpaa_bp_info *bp_info;
++	struct qm_fd fd_arr[DPAA_TX_BURST_SIZE];
++	uint32_t frames_to_send, loop, sent = 0;
++	uint16_t state;
++	int ret, realloc_mbuf = 0;
++	struct dpaa_if *dpaa_intf = ((struct qman_fq *)q)->dpaa_intf;
++
++	if (unlikely(!RTE_PER_LCORE(dpaa_io))) {
++		ret = rte_dpaa_portal_init((void *)0);
++		if (ret) {
++			DPAA_PMD_ERR("Failure in affining portal");
++			return 0;
++		}
++	}
++
++	DPAA_DP_LOG(DEBUG, "Transmitting %d buffers on queue: %p", nb_bufs, q);
++
++	while (nb_bufs) {
++		frames_to_send = (nb_bufs > DPAA_TX_BURST_SIZE) ?
++				DPAA_TX_BURST_SIZE : nb_bufs;
++		for (loop = 0; loop < frames_to_send; loop++) {
++			mbuf = *(bufs++);
++			if (dpaa_svr_family == SVR_LS1043A_FAMILY &&
++				((mbuf->data_off & 0xF) != 0x0))
++				realloc_mbuf = 1;
++			if (likely(RTE_MBUF_DIRECT(mbuf))) {
++				mp = dpaa_intf->bp_info->mp;
++				bp_info = DPAA_MEMPOOL_TO_POOL_INFO(mp);
++				if (likely(mbuf->nb_segs == 1 &&
++						realloc_mbuf == 0 &&
++						rte_mbuf_refcnt_read(mbuf) == 1)) {
++					DPAA_MBUF_TO_CONTIG_FD(mbuf,
++						&fd_arr[loop], bp_info->bpid);
++					if (mbuf->ol_flags & DPAA_TX_CKSUM_OFFLOAD_MASK)
++						dpaa_unsegmented_checksum(mbuf, &fd_arr[loop]);
++					continue;
++				}
++			} else {
++				mi = rte_mbuf_from_indirect(mbuf);
++				mp = mi->pool;
++			}
++
++			bp_info = DPAA_MEMPOOL_TO_POOL_INFO(mp);
++			if (likely(realloc_mbuf == 0)) {
++				state = tx_on_dpaa_pool(mbuf, bp_info,
++							&fd_arr[loop]);
++				if (unlikely(state)) {
++					/* Set frames_to_send & nb_bufs so
++					 * that packets are transmitted till
++					 * previous frame.
++					 */
++					frames_to_send = loop;
++					nb_bufs = loop;
++					goto send_pkts;
++				}
++			} else {
++				realloc_mbuf = 0;
++				state = tx_on_external_pool(q, mbuf,
++							    &fd_arr[loop]);
++				if (unlikely(state)) {
++					/* Set frames_to_send & nb_bufs so
++					 * that packets are transmitted till
++					 * previous frame.
++					 */
++					frames_to_send = loop;
++					nb_bufs = loop;
++					goto send_pkts;
++				}
++			}
++		}
++
++send_pkts:
++		loop = 0;
++		while (loop < frames_to_send) {
++			loop += qman_enqueue_multi(q, &fd_arr[loop], NULL,
++					frames_to_send - loop);
++		}
++		nb_bufs -= frames_to_send;
++		sent += frames_to_send;
++	}
++
++	DPAA_DP_LOG(DEBUG, "Transmitted %d buffers on queue: %p", sent, q);
++
++	return sent;
++}
+diff --git a/drivers/net/dpaa/dpaa_rxtx.h b/drivers/net/dpaa/dpaa_rxtx.h
+index 812d32808873..aa4e3f31b39a 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.h
++++ b/drivers/net/dpaa/dpaa_rxtx.h
+@@ -298,4 +298,14 @@ void dpaa_rx_cb(struct qman_fq **fq,
+ 		struct qm_dqrr_entry **dqrr, void **bufs, int num_bufs);
+ 
+ void dpaa_rx_cb_prepare(struct qm_dqrr_entry *dq, void **bufs);
++
++uint16_t
++dpaa_eth_ucode_queue_rx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs);
++
++uint16_t
++dpaa_eth_ucode_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs);
++
++void
++dpaa_ucode_rx_cb(struct qman_fq *fq, struct qm_dqrr_entry *dq, void **bufs);
++
+ #endif
+-- 
+2.14.3
+

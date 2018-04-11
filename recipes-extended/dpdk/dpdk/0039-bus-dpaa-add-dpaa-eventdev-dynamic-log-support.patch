@@ -1,0 +1,83 @@
+From f470ed59b4b01a16b7d87916603c0af47b51d3a4 Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Fri, 22 Dec 2017 20:47:16 +0530
+Subject: [PATCH 039/166] bus/dpaa: add dpaa eventdev dynamic log support
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/dpaa/dpaa_bus.c               |  5 +++++
+ drivers/bus/dpaa/rte_bus_dpaa_version.map |  1 +
+ drivers/bus/dpaa/rte_dpaa_logs.h          | 16 ++++++++++++++++
+ 3 files changed, 22 insertions(+)
+
+diff --git a/drivers/bus/dpaa/dpaa_bus.c b/drivers/bus/dpaa/dpaa_bus.c
+index 5a3c7a6bad98..78e6259f7727 100644
+--- a/drivers/bus/dpaa/dpaa_bus.c
++++ b/drivers/bus/dpaa/dpaa_bus.c
+@@ -70,6 +70,7 @@
+ int dpaa_logtype_bus;
+ int dpaa_logtype_mempool;
+ int dpaa_logtype_pmd;
++int dpaa_logtype_eventdev;
+ 
+ struct rte_dpaa_bus rte_dpaa_bus;
+ struct netcfg_info *dpaa_netcfg;
+@@ -566,4 +567,8 @@ dpaa_init_log(void)
+ 	dpaa_logtype_pmd = rte_log_register("pmd.dpaa");
+ 	if (dpaa_logtype_pmd >= 0)
+ 		rte_log_set_level(dpaa_logtype_pmd, RTE_LOG_NOTICE);
++
++	dpaa_logtype_eventdev = rte_log_register("eventdev.dpaa");
++	if (dpaa_logtype_eventdev >= 0)
++		rte_log_set_level(dpaa_logtype_eventdev, RTE_LOG_NOTICE);
+ }
+diff --git a/drivers/bus/dpaa/rte_bus_dpaa_version.map b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+index f5c291f0b481..925cf91881ed 100644
+--- a/drivers/bus/dpaa/rte_bus_dpaa_version.map
++++ b/drivers/bus/dpaa/rte_bus_dpaa_version.map
+@@ -68,6 +68,7 @@ DPDK_17.11 {
+ DPDK_18.02 {
+ 	global:
+ 
++	dpaa_logtype_eventdev;
+ 	dpaa_svr_family;
+ 	per_lcore_held_bufs;
+ 	qm_channel_pool1;
+diff --git a/drivers/bus/dpaa/rte_dpaa_logs.h b/drivers/bus/dpaa/rte_dpaa_logs.h
+index 037c96b03178..f36aac12908d 100644
+--- a/drivers/bus/dpaa/rte_dpaa_logs.h
++++ b/drivers/bus/dpaa/rte_dpaa_logs.h
+@@ -38,6 +38,7 @@
+ extern int dpaa_logtype_bus;
+ extern int dpaa_logtype_mempool;
+ extern int dpaa_logtype_pmd;
++extern int dpaa_logtype_eventdev;
+ 
+ #define DPAA_BUS_LOG(level, fmt, args...) \
+ 	rte_log(RTE_LOG_ ## level, dpaa_logtype_bus, "%s(): " fmt "\n", \
+@@ -100,6 +101,21 @@ extern int dpaa_logtype_pmd;
+ #define DPAA_PMD_WARN(fmt, args...) \
+ 	DPAA_PMD_LOG(WARNING, fmt, ## args)
+ 
++#define DPAA_EVENTDEV_LOG(level, fmt, args...) \
++	rte_log(RTE_LOG_ ## level, dpaa_logtype_eventdev, "%s(): " fmt "\n", \
++		__func__, ##args)
++
++#define EVENTDEV_INIT_FUNC_TRACE() DPAA_EVENTDEV_LOG(DEBUG, " >>")
++
++#define DPAA_EVENTDEV_DEBUG(fmt, args...) \
++	DPAA_EVENTDEV_LOG(DEBUG, fmt, ## args)
++#define DPAA_EVENTDEV_ERR(fmt, args...) \
++	DPAA_EVENTDEV_LOG(ERR, fmt, ## args)
++#define DPAA_EVENTDEV_INFO(fmt, args...) \
++	DPAA_EVENTDEV_LOG(INFO, fmt, ## args)
++#define DPAA_EVENTDEV_WARN(fmt, args...) \
++	DPAA_EVENTDEV_LOG(WARNING, fmt, ## args)
++
+ /* DP Logs, toggled out at compile time if level lower than current level */
+ #define DPAA_DP_LOG(level, fmt, args...) \
+ 	RTE_LOG_DP(level, PMD, fmt, ## args)
+-- 
+2.14.3
+

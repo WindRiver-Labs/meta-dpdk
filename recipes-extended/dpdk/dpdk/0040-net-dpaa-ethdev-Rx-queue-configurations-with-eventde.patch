@@ -1,0 +1,368 @@
+From 95682de0f151e5c7762452a71c6353dd603123a1 Mon Sep 17 00:00:00 2001
+From: Sunil Kumar Kori <sunil.kori@nxp.com>
+Date: Tue, 16 Jan 2018 16:10:13 +0530
+Subject: [PATCH 040/166] net/dpaa: ethdev Rx queue configurations with
+ eventdev
+
+Given ethernet Rx queues can be attached with event queue in
+parallel or atomic mode. Patch imlmplements Rx queue
+configuration, attachment/detachment with given event queue and their
+corresponding callbacks to handle events from respective queues.
+
+Signed-off-by: Sunil Kumar Kori <sunil.kori@nxp.com>
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa/Makefile                 |   2 +
+ drivers/net/dpaa/dpaa_ethdev.c            | 115 ++++++++++++++++++++++++++++--
+ drivers/net/dpaa/dpaa_ethdev.h            |  29 ++++++++
+ drivers/net/dpaa/dpaa_rxtx.c              |  80 ++++++++++++++++++++-
+ drivers/net/dpaa/rte_pmd_dpaa_version.map |   2 +
+ 5 files changed, 219 insertions(+), 9 deletions(-)
+
+diff --git a/drivers/net/dpaa/Makefile b/drivers/net/dpaa/Makefile
+index a99d1ee31236..c644353f5c6c 100644
+--- a/drivers/net/dpaa/Makefile
++++ b/drivers/net/dpaa/Makefile
+@@ -43,7 +43,9 @@ CFLAGS += -I$(RTE_SDK_DPAA)/
+ CFLAGS += -I$(RTE_SDK_DPAA)/include
+ CFLAGS += -I$(RTE_SDK)/drivers/bus/dpaa
+ CFLAGS += -I$(RTE_SDK)/drivers/bus/dpaa/include/
++CFLAGS += -I$(RTE_SDK)/drivers/bus/dpaa/base/qbman
+ CFLAGS += -I$(RTE_SDK)/drivers/mempool/dpaa
++CFLAGS += -I$(RTE_SDK)/drivers/event/dpaa
+ CFLAGS += -I$(RTE_SDK)/lib/librte_eal/common/include
+ CFLAGS += -I$(RTE_SDK)/lib/librte_eal/linuxapp/eal/include
+ 
+diff --git a/drivers/net/dpaa/dpaa_ethdev.c b/drivers/net/dpaa/dpaa_ethdev.c
+index 74a5bedfed13..6603a7a4c7f2 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.c
++++ b/drivers/net/dpaa/dpaa_ethdev.c
+@@ -121,6 +121,21 @@ static const struct rte_dpaa_xstats_name_off dpaa_xstats_strings[] = {
+ 
+ static struct rte_dpaa_driver rte_dpaa_pmd;
+ 
++static inline void
++dpaa_poll_queue_default_config(struct qm_mcc_initfq *opts)
++{
++	memset(opts, 0, sizeof(struct qm_mcc_initfq));
++	opts->we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_CONTEXTA;
++	opts->fqd.fq_ctrl = QM_FQCTRL_AVOIDBLOCK | QM_FQCTRL_CTXASTASHING |
++			   QM_FQCTRL_PREFERINCACHE;
++	opts->fqd.context_a.stashing.exclusive = 0;
++	if (dpaa_svr_family != SVR_LS1046A_FAMILY)
++		opts->fqd.context_a.stashing.annotation_cl =
++						DPAA_IF_RX_ANNOTATION_STASH;
++	opts->fqd.context_a.stashing.data_cl = DPAA_IF_RX_DATA_STASH;
++	opts->fqd.context_a.stashing.context_cl = DPAA_IF_RX_CONTEXT_STASH;
++}
++
+ static int
+ dpaa_mtu_set(struct rte_eth_dev *dev, uint16_t mtu)
+ {
+@@ -559,6 +574,97 @@ int dpaa_eth_rx_queue_setup(struct rte_eth_dev *dev, uint16_t queue_idx,
+ 	return 0;
+ }
+ 
++int dpaa_eth_eventq_attach(const struct rte_eth_dev *dev,
++			   int eth_rx_queue_id,
++		u16 ch_id,
++		const struct rte_event_eth_rx_adapter_queue_conf *queue_conf)
++{
++	int ret;
++	u32 flags = 0;
++	struct dpaa_if *dpaa_intf = dev->data->dev_private;
++	struct qman_fq *rxq = &dpaa_intf->rx_queues[eth_rx_queue_id];
++	struct qm_mcc_initfq opts = {0};
++
++	if (dpaa_push_mode_max_queue)
++		DPAA_PMD_WARN("PUSH mode already enabled for first %d queues.\n"
++			      "To disable set DPAA_PUSH_QUEUES_NUMBER to 0\n",
++			      dpaa_push_mode_max_queue);
++
++	dpaa_poll_queue_default_config(&opts);
++
++	switch (queue_conf->ev.sched_type) {
++	case RTE_SCHED_TYPE_ATOMIC:
++		opts.fqd.fq_ctrl |= QM_FQCTRL_HOLDACTIVE;
++		/* Reset FQCTRL_AVOIDBLOCK bit as it is unnecessary
++		 * configuration with HOLD_ACTIVE setting
++		 */
++		opts.fqd.fq_ctrl &= (~QM_FQCTRL_AVOIDBLOCK);
++		rxq->cb.dqrr_dpdk_cb = dpaa_rx_cb_atomic;
++		break;
++	case RTE_SCHED_TYPE_ORDERED:
++		DPAA_PMD_ERR("Ordered queue schedule type is not supported\n");
++		return -1;
++	default:
++		opts.fqd.fq_ctrl |= QM_FQCTRL_AVOIDBLOCK;
++		rxq->cb.dqrr_dpdk_cb = dpaa_rx_cb_parallel;
++		break;
++	}
++
++	opts.we_mask = opts.we_mask | QM_INITFQ_WE_DESTWQ;
++	opts.fqd.dest.channel = ch_id;
++	opts.fqd.dest.wq = queue_conf->ev.priority;
++
++	if (dpaa_intf->cgr_rx) {
++		opts.we_mask |= QM_INITFQ_WE_CGID;
++		opts.fqd.cgid = dpaa_intf->cgr_rx[eth_rx_queue_id].cgrid;
++		opts.fqd.fq_ctrl |= QM_FQCTRL_CGE;
++	}
++
++	flags = QMAN_INITFQ_FLAG_SCHED;
++
++	ret = qman_init_fq(rxq, flags, &opts);
++	if (ret) {
++		DPAA_PMD_ERR("Channel/Queue association failed. fqid %d ret:%d",
++			     rxq->fqid, ret);
++		return ret;
++	}
++
++	/* copy configuration which needs to be filled during dequeue */
++	memcpy(&rxq->ev, &queue_conf->ev, sizeof(struct rte_event));
++	dev->data->rx_queues[eth_rx_queue_id] = rxq;
++
++	return ret;
++}
++
++int dpaa_eth_eventq_detach(const struct rte_eth_dev *dev,
++			   int eth_rx_queue_id)
++{
++	struct qm_mcc_initfq opts;
++	int ret;
++	u32 flags = 0;
++	struct dpaa_if *dpaa_intf = dev->data->dev_private;
++	struct qman_fq *rxq = &dpaa_intf->rx_queues[eth_rx_queue_id];
++
++	dpaa_poll_queue_default_config(&opts);
++
++	if (dpaa_intf->cgr_rx) {
++		opts.we_mask |= QM_INITFQ_WE_CGID;
++		opts.fqd.cgid = dpaa_intf->cgr_rx[eth_rx_queue_id].cgrid;
++		opts.fqd.fq_ctrl |= QM_FQCTRL_CGE;
++	}
++
++	ret = qman_init_fq(rxq, flags, &opts);
++	if (ret) {
++		DPAA_PMD_ERR("init rx fqid %d failed with ret: %d",
++			     rxq->fqid, ret);
++	}
++
++	rxq->cb.dqrr_dpdk_cb = NULL;
++	dev->data->rx_queues[eth_rx_queue_id] = NULL;
++
++	return 0;
++}
++
+ static
+ void dpaa_eth_rx_queue_release(void *rxq __rte_unused)
+ {
+@@ -879,13 +985,8 @@ static int dpaa_rx_queue_init(struct qman_fq *fq, struct qman_cgr *cgr_rx,
+ 		return ret;
+ 	}
+ 	fq->is_static = false;
+-	opts.we_mask = QM_INITFQ_WE_FQCTRL | QM_INITFQ_WE_CONTEXTA;
+-	opts.fqd.fq_ctrl = QM_FQCTRL_AVOIDBLOCK | QM_FQCTRL_CTXASTASHING |
+-			   QM_FQCTRL_PREFERINCACHE;
+-	opts.fqd.context_a.stashing.exclusive = 0;
+-	opts.fqd.context_a.stashing.annotation_cl = DPAA_IF_RX_ANNOTATION_STASH;
+-	opts.fqd.context_a.stashing.data_cl = DPAA_IF_RX_DATA_STASH;
+-	opts.fqd.context_a.stashing.context_cl = DPAA_IF_RX_CONTEXT_STASH;
++
++	dpaa_poll_queue_default_config(&opts);
+ 
+ 	if (cgr_rx) {
+ 		/* Enable tail drop with cgr on this queue */
+diff --git a/drivers/net/dpaa/dpaa_ethdev.h b/drivers/net/dpaa/dpaa_ethdev.h
+index c0a84309ce38..b81522a521b0 100644
+--- a/drivers/net/dpaa/dpaa_ethdev.h
++++ b/drivers/net/dpaa/dpaa_ethdev.h
+@@ -36,6 +36,7 @@
+ /* System headers */
+ #include <stdbool.h>
+ #include <rte_ethdev.h>
++#include <rte_event_eth_rx_adapter.h>
+ 
+ #include <fsl_usd.h>
+ #include <fsl_qman.h>
+@@ -50,6 +51,13 @@
+ #error "Annotation requirement is more than RTE_PKTMBUF_HEADROOM"
+ #endif
+ 
++/* mbuf->seqn will be used to store event entry index for
++ * driver specific usage. For parallel mode queues, invalid
++ * index will be set and for atomic mode queues, valid value
++ * ranging from 1 to 16.
++ */
++#define DPAA_INVALID_MBUF_SEQN  0
++
+ /* we will re-use the HEADROOM for annotation in RX */
+ #define DPAA_HW_BUF_RESERVE	0
+ #define DPAA_PACKET_LAYOUT_ALIGN	64
+@@ -178,4 +186,25 @@ struct dpaa_if_stats {
+ 	uint64_t tund;		/**<Tx Undersized */
+ };
+ 
++int dpaa_eth_eventq_attach(const struct rte_eth_dev *dev,
++			   int eth_rx_queue_id,
++		u16 ch_id,
++		const struct rte_event_eth_rx_adapter_queue_conf *queue_conf);
++
++int dpaa_eth_eventq_detach(const struct rte_eth_dev *dev,
++			   int eth_rx_queue_id);
++
++enum qman_cb_dqrr_result
++dpaa_rx_cb_parallel(void *event,
++		    struct qman_portal *qm __always_unused,
++		    struct qman_fq *fq,
++		    const struct qm_dqrr_entry *dqrr,
++		    void **bufs);
++enum qman_cb_dqrr_result
++dpaa_rx_cb_atomic(void *event,
++		  struct qman_portal *qm __always_unused,
++		  struct qman_fq *fq,
++		  const struct qm_dqrr_entry *dqrr,
++		  void **bufs);
++
+ #endif
+diff --git a/drivers/net/dpaa/dpaa_rxtx.c b/drivers/net/dpaa/dpaa_rxtx.c
+index 1caecf211308..53be8a9ce587 100644
+--- a/drivers/net/dpaa/dpaa_rxtx.c
++++ b/drivers/net/dpaa/dpaa_rxtx.c
+@@ -59,12 +59,14 @@
+ #include <rte_tcp.h>
+ #include <rte_udp.h>
+ #include <rte_net.h>
++#include <rte_eventdev.h>
+ 
+ #include "dpaa_ethdev.h"
+ #include "dpaa_rxtx.h"
+ #include <rte_dpaa_bus.h>
+ #include <dpaa_mempool.h>
+ 
++#include <qman.h>
+ #include <fsl_usd.h>
+ #include <fsl_qman.h>
+ #include <fsl_bman.h>
+@@ -451,6 +453,67 @@ dpaa_eth_queue_portal_rx(struct qman_fq *fq,
+ 	return qman_portal_poll_rx(nb_bufs, (void **)bufs, fq->qp);
+ }
+ 
++enum qman_cb_dqrr_result
++dpaa_rx_cb_parallel(void *event,
++		    struct qman_portal *qm __always_unused,
++		    struct qman_fq *fq,
++		    const struct qm_dqrr_entry *dqrr,
++		    void **bufs)
++{
++	u32 ifid = ((struct dpaa_if *)fq->dpaa_intf)->ifid;
++	struct rte_mbuf *mbuf;
++	struct rte_event *ev = (struct rte_event *)event;
++
++	mbuf = dpaa_eth_fd_to_mbuf(&dqrr->fd, ifid);
++	ev->event_ptr = (void *)mbuf;
++	ev->flow_id = fq->ev.flow_id;
++	ev->sub_event_type = fq->ev.sub_event_type;
++	ev->event_type = RTE_EVENT_TYPE_ETHDEV;
++	ev->op = RTE_EVENT_OP_NEW;
++	ev->sched_type = fq->ev.sched_type;
++	ev->queue_id = fq->ev.queue_id;
++	ev->priority = fq->ev.priority;
++	ev->impl_opaque = (uint8_t)DPAA_INVALID_MBUF_SEQN;
++	mbuf->seqn = DPAA_INVALID_MBUF_SEQN;
++	*bufs = mbuf;
++
++	return qman_cb_dqrr_consume;
++}
++
++enum qman_cb_dqrr_result
++dpaa_rx_cb_atomic(void *event,
++		  struct qman_portal *qm __always_unused,
++		  struct qman_fq *fq,
++		  const struct qm_dqrr_entry *dqrr,
++		  void **bufs)
++{
++	u8 index;
++	u32 ifid = ((struct dpaa_if *)fq->dpaa_intf)->ifid;
++	struct rte_mbuf *mbuf;
++	struct rte_event *ev = (struct rte_event *)event;
++
++	mbuf = dpaa_eth_fd_to_mbuf(&dqrr->fd, ifid);
++	ev->event_ptr = (void *)mbuf;
++	ev->flow_id = fq->ev.flow_id;
++	ev->sub_event_type = fq->ev.sub_event_type;
++	ev->event_type = RTE_EVENT_TYPE_ETHDEV;
++	ev->op = RTE_EVENT_OP_NEW;
++	ev->sched_type = fq->ev.sched_type;
++	ev->queue_id = fq->ev.queue_id;
++	ev->priority = fq->ev.priority;
++
++	/* Save active dqrr entries */
++	index = DQRR_PTR2IDX(dqrr);
++	DPAA_PER_LCORE_DQRR_SIZE++;
++	DPAA_PER_LCORE_DQRR_HELD |= 1 << index;
++	DPAA_PER_LCORE_DQRR_MBUF(index) = mbuf;
++	ev->impl_opaque = index + 1;
++	mbuf->seqn = (uint32_t)index + 1;
++	*bufs = mbuf;
++
++	return qman_cb_dqrr_defer;
++}
++
+ uint16_t dpaa_eth_queue_rx(void *q,
+ 			   struct rte_mbuf **bufs,
+ 			   uint16_t nb_bufs)
+@@ -734,6 +797,7 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 	uint32_t frames_to_send, loop, sent = 0;
+ 	uint16_t state;
+ 	int ret;
++	uint32_t seqn, index, flags[DPAA_TX_BURST_SIZE] = {0};
+ 
+ 	ret = rte_dpaa_portal_init((void *)0);
+ 	if (ret) {
+@@ -794,14 +858,26 @@ dpaa_eth_queue_tx(void *q, struct rte_mbuf **bufs, uint16_t nb_bufs)
+ 					goto send_pkts;
+ 				}
+ 			}
++			seqn = mbuf->seqn;
++			if (seqn != DPAA_INVALID_MBUF_SEQN) {
++				index = seqn - 1;
++				if (DPAA_PER_LCORE_DQRR_HELD & (1 << index)) {
++					flags[loop] =
++					   ((index & QM_EQCR_DCA_IDXMASK) << 8);
++					flags[loop] |= QMAN_ENQUEUE_FLAG_DCA;
++					DPAA_PER_LCORE_DQRR_SIZE--;
++					DPAA_PER_LCORE_DQRR_HELD &=
++								~(1 << index);
++				}
++			}
+ 		}
+ 
+ send_pkts:
+ 		loop = 0;
+ 		while (loop < frames_to_send) {
+ 			loop += qman_enqueue_multi(q, &fd_arr[loop],
+-						   NULL,
+-					frames_to_send - loop);
++						   &flags[loop],
++						   frames_to_send - loop);
+ 		}
+ 		nb_bufs -= frames_to_send;
+ 		sent += frames_to_send;
+diff --git a/drivers/net/dpaa/rte_pmd_dpaa_version.map b/drivers/net/dpaa/rte_pmd_dpaa_version.map
+index d1f3ea4b880b..3b937b10f07d 100644
+--- a/drivers/net/dpaa/rte_pmd_dpaa_version.map
++++ b/drivers/net/dpaa/rte_pmd_dpaa_version.map
+@@ -6,6 +6,8 @@ DPDK_17.11 {
+ EXPERIMENTAL {
+ 	global:
+ 
++	dpaa_eth_eventq_attach;
++	dpaa_eth_eventq_detach;
+ 	rte_pmd_dpaa_set_tx_loopback;
+ 
+ 	local: *;
+-- 
+2.14.3
+

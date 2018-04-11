@@ -1,0 +1,60 @@
+From 080acb32b8b2b59e221ee7d1c1b7a363aa82c332 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:17 +0530
+Subject: [PATCH 003/166] net/dpaa2: link status check as driver flag
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/rte_fslmc.h    | 4 ++++
+ drivers/net/dpaa2/dpaa2_ethdev.c | 6 ++++--
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/bus/fslmc/rte_fslmc.h b/drivers/bus/fslmc/rte_fslmc.h
+index 0c7872d9c71f..fd52e2b84ddd 100644
+--- a/drivers/bus/fslmc/rte_fslmc.h
++++ b/drivers/bus/fslmc/rte_fslmc.h
+@@ -62,6 +62,10 @@ extern "C" {
+ 
+ #define FSLMC_OBJECT_MAX_LEN 32   /**< Length of each device on bus */
+ 
++
++/** Device driver supports link state interrupt */
++#define RTE_DPAA2_DRV_INTR_LSC	0x0008
++
+ /** Device driver supports IOVA as VA */
+ #define RTE_DPAA2_DRV_IOVA_AS_VA 0X0040
+ 
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 38de3d92469e..1cd302d25c77 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -1872,7 +1872,6 @@ dpaa2_dev_init(struct rte_eth_dev *eth_dev)
+ 	}
+ 
+ 	eth_dev->dev_ops = &dpaa2_ethdev_ops;
+-	eth_dev->data->dev_flags |= RTE_ETH_DEV_INTR_LSC;
+ 
+ 	eth_dev->rx_pkt_burst = dpaa2_dev_prefetch_rx;
+ 	eth_dev->tx_pkt_burst = dpaa2_dev_tx;
+@@ -1976,6 +1975,9 @@ rte_dpaa2_probe(struct rte_dpaa2_driver *dpaa2_drv,
+ 	dpaa2_dev->eth_dev = eth_dev;
+ 	eth_dev->data->rx_mbuf_alloc_failed = 0;
+ 
++	if (dpaa2_drv->drv_flags & RTE_DPAA2_DRV_INTR_LSC)
++		eth_dev->data->dev_flags |= RTE_ETH_DEV_INTR_LSC;
++
+ 	/* Invoke PMD device initialization function */
+ 	diag = dpaa2_dev_init(eth_dev);
+ 	if (diag == 0)
+@@ -2003,7 +2005,7 @@ rte_dpaa2_remove(struct rte_dpaa2_device *dpaa2_dev)
+ }
+ 
+ static struct rte_dpaa2_driver rte_dpaa2_pmd = {
+-	.drv_flags = RTE_DPAA2_DRV_IOVA_AS_VA,
++	.drv_flags = RTE_DPAA2_DRV_INTR_LSC | RTE_DPAA2_DRV_IOVA_AS_VA,
+ 	.drv_type = DPAA2_ETH,
+ 	.probe = rte_dpaa2_probe,
+ 	.remove = rte_dpaa2_remove,
+-- 
+2.14.3
+

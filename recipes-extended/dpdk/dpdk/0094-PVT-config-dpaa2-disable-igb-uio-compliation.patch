@@ -1,0 +1,27 @@
+From 35f7aed9a740a0afc1b7d70726c36da4d9893f8b Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Fri, 12 Jan 2018 19:42:20 +0530
+Subject: [PATCH 094/166] PVT: config/dpaa2: disable igb uio compliation
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+---
+ config/defconfig_arm64-dpaa2-linuxapp-gcc | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/config/defconfig_arm64-dpaa2-linuxapp-gcc b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+index 699d827d31b1..9e267343330f 100644
+--- a/config/defconfig_arm64-dpaa2-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+@@ -49,6 +49,9 @@ CONFIG_RTE_PKTMBUF_HEADROOM=128
+ CONFIG_RTE_EAL_NUMA_AWARE_HUGEPAGES=n
+ CONFIG_RTE_LIBRTE_VHOST_NUMA=n
+ 
++# Disable IGB_UIO compilation
++CONFIG_RTE_EAL_IGB_UIO=n
++
+ #
+ # Compile Support Libraries for DPAA2
+ #
+-- 
+2.14.3
+

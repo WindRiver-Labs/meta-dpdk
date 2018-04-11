@@ -1,0 +1,114 @@
+From 5718644c2db2ec30071528c7f785555d1c86b874 Mon Sep 17 00:00:00 2001
+From: Shreyansh Jain <shreyansh.jain@nxp.com>
+Date: Tue, 2 Jan 2018 18:38:38 +0530
+Subject: [PATCH 018/166] bus/fslmc: add support for scanned device count
+
+FSLMC bus detects a multiple type of logical objects representing
+components of the datapath.
+
+Using the type of device, a newly introduced API
+rte_fslmc_get_device_count can return the count of devices
+scanned of that device type.
+
+Signed-off-by: Shreyansh Jain <shreyansh.jain@nxp.com>
+Acked-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/fslmc_bus.c               | 12 ++++++++++++
+ drivers/bus/fslmc/rte_bus_fslmc_version.map |  1 +
+ drivers/bus/fslmc/rte_fslmc.h               | 18 +++++++++++++++---
+ 3 files changed, 28 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index 63c333a59dee..39478f7f388a 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -53,6 +53,14 @@
+ struct rte_fslmc_bus rte_fslmc_bus;
+ uint8_t dpaa2_virt_mode;
+ 
++uint32_t
++rte_fslmc_get_device_count(enum rte_dpaa2_dev_type device_type)
++{
++	if (device_type > DPAA2_DEVTYPE_MAX)
++		return 0;
++	return rte_fslmc_bus.device_count[device_type];
++}
++
+ static void
+ cleanup_fslmc_device_list(void)
+ {
+@@ -164,6 +172,9 @@ scan_one_fslmc_device(char *dev_name)
+ 	else
+ 		dev->dev_type = DPAA2_UNKNOWN;
+ 
++	/* Update the device found into the device_count table */
++	rte_fslmc_bus.device_count[dev->dev_type]++;
++
+ 	t_ptr = strtok(NULL, ".");
+ 	if (!t_ptr) {
+ 		FSLMC_BUS_LOG(ERR, "Incorrect device string observed (%s).",
+@@ -408,6 +419,7 @@ struct rte_fslmc_bus rte_fslmc_bus = {
+ 	},
+ 	.device_list = TAILQ_HEAD_INITIALIZER(rte_fslmc_bus.device_list),
+ 	.driver_list = TAILQ_HEAD_INITIALIZER(rte_fslmc_bus.driver_list),
++	.device_count = {0},
+ };
+ 
+ RTE_REGISTER_BUS(fslmc, rte_fslmc_bus.bus);
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index f59fc671f6ac..16b759d8b8c1 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -97,5 +97,6 @@ DPDK_18.02 {
+ 	dpaa2_virt_mode;
+ 	qbman_fq_query_state;
+ 	qbman_fq_state_frame_count;
++	rte_fslmc_get_device_count;
+ 
+ } DPDK_17.11;
+diff --git a/drivers/bus/fslmc/rte_fslmc.h b/drivers/bus/fslmc/rte_fslmc.h
+index fd52e2b84ddd..e6314b5cb9b6 100644
+--- a/drivers/bus/fslmc/rte_fslmc.h
++++ b/drivers/bus/fslmc/rte_fslmc.h
+@@ -88,7 +88,8 @@ enum rte_dpaa2_dev_type {
+ 	DPAA2_CI,	/**< DPCI type device */
+ 	DPAA2_MPORTAL,  /**< DPMCP type device */
+ 	/* Unknown device placeholder */
+-	DPAA2_UNKNOWN
++	DPAA2_UNKNOWN,
++	DPAA2_DEVTYPE_MAX,
+ };
+ 
+ TAILQ_HEAD(rte_dpaa2_object_list, rte_dpaa2_object);
+@@ -150,8 +151,8 @@ struct rte_fslmc_bus {
+ 				/**< FSLMC DPAA2 Device list */
+ 	struct rte_fslmc_driver_list driver_list;
+ 				/**< FSLMC DPAA2 Driver list */
+-	int device_count;
+-				/**< Optional: Count of devices on bus */
++	int device_count[DPAA2_DEVTYPE_MAX];
++				/**< Count of all devices scanned */
+ };
+ 
+ /**
+@@ -191,6 +192,17 @@ RTE_PMD_EXPORT_NAME(nm, __COUNTER__)
+  */
+ void rte_fslmc_object_register(struct rte_dpaa2_object *object);
+ 
++/**
++ * Count of a particular type of DPAA2 device scanned on the bus.
++ *
++ * @param dev_type
++ *   Type of device as rte_dpaa2_dev_type enumerator
++ * @return
++ *   >=0 for count; 0 indicates either no device of the said type scanned or
++ *   invalid device type.
++ */
++uint32_t rte_fslmc_get_device_count(enum rte_dpaa2_dev_type device_type);
++
+ /** Helper for DPAA2 object registration */
+ #define RTE_PMD_REGISTER_DPAA2_OBJECT(nm, dpaa2_obj) \
+ RTE_INIT(dpaa2objinitfn_ ##nm); \
+-- 
+2.14.3
+

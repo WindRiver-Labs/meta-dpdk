@@ -1,0 +1,39 @@
+From 4c22a6c776c61d5e6dfb4a2d21897b9261e6d024 Mon Sep 17 00:00:00 2001
+From: Thomas Monjalon <thomas@monjalon.net>
+Date: Mon, 29 Jan 2018 23:20:40 +0100
+Subject: [PATCH 152/166] crypto/dpaa2_sec: fix build with GCC 7
+
+Seen with GCC 7.2.0, a switch fall through is detected and
+cannot be fixed with a fall-through comment or attribute:
+
+drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h:89:6: error:
+this statement may fall through [-Werror=implicit-fallthrough=]
+   if (rta_sec_era < RTA_SEC_ERA_2)
+      ^
+
+The check is disabled in dpaa2_sec Makefile but not in dpaa_sec Makefile
+which uses source code shared by dpaa2_sec.
+
+The workaround is to disable the check at the beginning of the file.
+
+Signed-off-by: Thomas Monjalon <thomas@monjalon.net>
+---
+ drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+index 0a36d6f8f108..0eaa54ff14e2 100644
+--- a/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
++++ b/drivers/crypto/dpaa2_sec/hw/rta/operation_cmd.h
+@@ -41,6 +41,8 @@
+ #ifndef __RTA_OPERATION_CMD_H__
+ #define __RTA_OPERATION_CMD_H__
+ 
++#pragma GCC diagnostic ignored "-Wimplicit-fallthrough"
++
+ extern enum rta_sec_era rta_sec_era;
+ 
+ static inline int
+-- 
+2.14.3
+

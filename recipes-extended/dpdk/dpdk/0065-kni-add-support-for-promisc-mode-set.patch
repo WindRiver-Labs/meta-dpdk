@@ -1,0 +1,204 @@
+From f8ce84901156d4c995d57a72d25b17b014ac19de Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Thu, 18 Jan 2018 11:42:59 +0530
+Subject: [PATCH 065/166] kni: add support for promisc mode set
+
+Inform userspace app about promisc mode change
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ doc/guides/sample_app_ug/kernel_nic_interface.rst  | 15 ++++++++---
+ .../linuxapp/eal/include/exec-env/rte_kni_common.h |  2 ++
+ lib/librte_eal/linuxapp/kni/kni_net.c              | 17 ++++++++++++
+ lib/librte_kni/rte_kni.c                           | 31 +++++++++++++++++++++-
+ lib/librte_kni/rte_kni.h                           |  3 +++
+ test/test/test_kni.c                               |  2 ++
+ 6 files changed, 66 insertions(+), 4 deletions(-)
+
+diff --git a/doc/guides/sample_app_ug/kernel_nic_interface.rst b/doc/guides/sample_app_ug/kernel_nic_interface.rst
+index 2c143daaf738..4dd1f82f0998 100644
+--- a/doc/guides/sample_app_ug/kernel_nic_interface.rst
++++ b/doc/guides/sample_app_ug/kernel_nic_interface.rst
+@@ -512,11 +512,11 @@ Callbacks for Kernel Requests
+ 
+ To execute specific PMD operations in user space requested by some Linux* commands,
+ callbacks must be implemented and filled in the struct rte_kni_ops structure.
+-Currently, setting a new MTU, change in mac address and configuring the network interface(up/ down)
+-are supported.
++Currently, setting a new MTU, change in mac address, configuring promiscusous mode
++and configuring the network interface(up/ down) are supported.
+ Default implementation for following is available in rte_kni library. Application
+ may choose to not implement follwoing callbacks:
+-	``config_mac_address``
++	``config_mac_address`` and ``config_promiscusity``
+ 
+ 
+ .. code-block:: c
+@@ -525,6 +525,7 @@ may choose to not implement follwoing callbacks:
+         .change_mtu = kni_change_mtu,
+         .config_network_if = kni_config_network_interface,
+         .config_mac_address = kni_config_mac_address,
++        .config_promiscusity = kni_config_promiscusity,
+     };
+ 
+     /* Callback for request of changing MTU */
+@@ -611,3 +612,11 @@ may choose to not implement follwoing callbacks:
+     {
+         .....
+     }
++
++    /* Callback for request of configuring promiscuous mode */
++
++    static int
++    kni_config_promiscusity(uint16_t port_id, uint8_t to_on)
++    {
++        .....
++    }
+diff --git a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+index a7bee7369eff..d9d332c4bd67 100644
+--- a/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
++++ b/lib/librte_eal/linuxapp/eal/include/exec-env/rte_kni_common.h
+@@ -82,6 +82,7 @@ enum rte_kni_req_id {
+ 	RTE_KNI_REQ_CHANGE_MTU,
+ 	RTE_KNI_REQ_CFG_NETWORK_IF,
+ 	RTE_KNI_REQ_CHANGE_MAC_ADDR,
++	RTE_KNI_REQ_CHANGE_PROMISC,
+ 	RTE_KNI_REQ_MAX,
+ };
+ 
+@@ -95,6 +96,7 @@ struct rte_kni_request {
+ 		uint32_t new_mtu;    /**< New MTU */
+ 		uint8_t if_up;       /**< 1: interface up, 0: interface down */
+ 		uint8_t mac_addr[6]; /**< MAC address for interface */
++		uint8_t promiscusity;/**< 1: promisc mode enable, 0: disable */
+ 	};
+ 	int32_t result;               /**< Result for processing request */
+ } __attribute__((__packed__));
+diff --git a/lib/librte_eal/linuxapp/kni/kni_net.c b/lib/librte_eal/linuxapp/kni/kni_net.c
+index 3e02ea1197c0..e261c5877b1b 100644
+--- a/lib/librte_eal/linuxapp/kni/kni_net.c
++++ b/lib/librte_eal/linuxapp/kni/kni_net.c
+@@ -603,6 +603,22 @@ kni_net_change_mtu(struct net_device *dev, int new_mtu)
+ 	return (ret == 0) ? req.result : ret;
+ }
+ 
++static void
++kni_net_set_promiscusity(struct net_device *netdev, int flags)
++{
++	struct rte_kni_request req;
++	struct kni_dev *kni = netdev_priv(netdev);
++
++	memset(&req, 0, sizeof(req));
++	req.req_id = RTE_KNI_REQ_CHANGE_PROMISC;
++
++	if (netdev->flags & IFF_PROMISC)
++		req.promiscusity = 1;
++	else
++		req.promiscusity = 0;
++	kni_net_process_request(kni, &req);
++}
++
+ /*
+  * Checks if the user space application provided the resp message
+  */
+@@ -712,6 +728,7 @@ static const struct net_device_ops kni_net_netdev_ops = {
+ 	.ndo_open = kni_net_open,
+ 	.ndo_stop = kni_net_release,
+ 	.ndo_set_config = kni_net_config,
++	.ndo_change_rx_flags = kni_net_set_promiscusity,
+ 	.ndo_start_xmit = kni_net_tx,
+ 	.ndo_change_mtu = kni_net_change_mtu,
+ 	.ndo_do_ioctl = kni_net_ioctl,
+diff --git a/lib/librte_kni/rte_kni.c b/lib/librte_kni/rte_kni.c
+index 63afb7eb36be..e66e23bf1bab 100644
+--- a/lib/librte_kni/rte_kni.c
++++ b/lib/librte_kni/rte_kni.c
+@@ -554,6 +554,26 @@ kni_config_mac_address(uint16_t port_id, uint8_t mac_addr[])
+ 	return ret;
+ }
+ 
++/* default callback for request of configuring promiscuous mode */
++static int
++kni_config_promiscusity(uint16_t port_id, uint8_t to_on)
++{
++	if (port_id >= rte_eth_dev_count() || port_id >= RTE_MAX_ETHPORTS) {
++		RTE_LOG(ERR, KNI, "Invalid port id %d\n", port_id);
++		return -EINVAL;
++	}
++
++	RTE_LOG(INFO, KNI, "Configure promiscuous mode of %d to %d\n",
++		port_id, to_on);
++
++	if (to_on)
++		rte_eth_promiscuous_enable(port_id);
++	else
++		rte_eth_promiscuous_disable(port_id);
++
++	return 0;
++}
++
+ int
+ rte_kni_handle_request(struct rte_kni *kni)
+ {
+@@ -593,6 +613,14 @@ rte_kni_handle_request(struct rte_kni *kni)
+ 			req->result = kni_config_mac_address(
+ 					kni->ops.port_id, req->mac_addr);
+ 		break;
++	case RTE_KNI_REQ_CHANGE_PROMISC: /* Change PROMISCUOUS MODE */
++		if (kni->ops.config_promiscusity)
++			req->result = kni->ops.config_promiscusity(
++					kni->ops.port_id, req->promiscusity);
++		else if (kni->ops.port_id != UINT16_MAX)
++			req->result = kni_config_promiscusity(
++					kni->ops.port_id, req->promiscusity);
++		break;
+ 	default:
+ 		RTE_LOG(ERR, KNI, "Unknown request id %u\n", req->req_id);
+ 		req->result = -EINVAL;
+@@ -743,7 +771,8 @@ kni_check_request_register(struct rte_kni_ops *ops)
+ 
+ 	if ((ops->change_mtu == NULL)
+ 		&& (ops->config_network_if == NULL)
+-		&& (ops->config_mac_address == NULL))
++		&& (ops->config_mac_address == NULL)
++		&& (ops->config_promiscusity == NULL))
+ 		return KNI_REQ_NO_REGISTER;
+ 
+ 	return KNI_REQ_REGISTERED;
+diff --git a/lib/librte_kni/rte_kni.h b/lib/librte_kni/rte_kni.h
+index 9bdc9f301eb5..4530bdd94b65 100644
+--- a/lib/librte_kni/rte_kni.h
++++ b/lib/librte_kni/rte_kni.h
+@@ -74,6 +74,9 @@ struct rte_kni_ops {
+ 
+ 	/* Pointer to function of configuring mac address */
+ 	int (*config_mac_address)(uint16_t port_id, uint8_t mac_addr[]);
++
++	/* Pointer to function of configuring promiscuous mode */
++	int (*config_promiscusity)(uint16_t port_id, uint8_t to_on);
+ };
+ 
+ /**
+diff --git a/test/test/test_kni.c b/test/test/test_kni.c
+index 06448c919e5d..56a7f3b365c1 100644
+--- a/test/test/test_kni.c
++++ b/test/test/test_kni.c
+@@ -104,6 +104,7 @@ static struct rte_kni_ops kni_ops = {
+ 	.change_mtu = NULL,
+ 	.config_network_if = NULL,
+ 	.config_mac_address = NULL,
++	.config_promiscusity = NULL,
+ };
+ 
+ static unsigned lcore_master, lcore_ingress, lcore_egress;
+@@ -262,6 +263,7 @@ test_kni_register_handler_mp(void)
+ 			.change_mtu = kni_change_mtu,
+ 			.config_network_if = NULL,
+ 			.config_mac_address = NULL,
++			.config_promiscusity = NULL,
+ 		};
+ 
+ 		if (!kni) {
+-- 
+2.14.3
+

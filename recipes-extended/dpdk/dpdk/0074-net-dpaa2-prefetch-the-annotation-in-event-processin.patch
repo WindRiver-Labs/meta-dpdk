@@ -1,0 +1,73 @@
+From b5eebf7f2026fce233f8897b4561d03e2cc0c32c Mon Sep 17 00:00:00 2001
+From: Nipun Gupta <nipun.gupta@nxp.com>
+Date: Tue, 23 Jan 2018 19:14:31 +0530
+Subject: [PATCH 074/166] net/dpaa2: prefetch the annotation in event
+ processing
+
+This patch adds software prefetching of the annotation which is
+accessed by the driver to fetch the parsing results. The changes
+also include as many instructions in between prefetching memory
+and using it.
+
+Signed-off-by: Nipun Gupta <nipun.gupta@nxp.com>
+---
+ drivers/net/dpaa2/dpaa2_rxtx.c | 24 ++++++++++++++++--------
+ 1 file changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 885968e49a5a..4c5e6a8549b6 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -702,7 +702,8 @@ dpaa2_dev_process_parallel_event(struct qbman_swp *swp,
+ 				 struct dpaa2_queue *rxq,
+ 				 struct rte_event *ev)
+ {
+-	ev->mbuf = eth_fd_to_mbuf(fd);
++	rte_prefetch0((void *)(DPAA2_GET_FD_ADDR(fd) +
++		DPAA2_FD_PTA_SIZE + 16));
+ 
+ 	ev->flow_id = rxq->ev.flow_id;
+ 	ev->sub_event_type = rxq->ev.sub_event_type;
+@@ -712,18 +713,22 @@ dpaa2_dev_process_parallel_event(struct qbman_swp *swp,
+ 	ev->queue_id = rxq->ev.queue_id;
+ 	ev->priority = rxq->ev.priority;
+ 
++	ev->mbuf = eth_fd_to_mbuf(fd);
++
+ 	qbman_swp_dqrr_consume(swp, dq);
+ }
+ 
+-void dpaa2_dev_process_atomic_event(struct qbman_swp *swp __attribute__((unused)),
+-				    const struct qbman_fd *fd,
+-				    const struct qbman_result *dq,
+-				    struct dpaa2_queue *rxq,
+-				    struct rte_event *ev)
++void __attribute__((hot))
++dpaa2_dev_process_atomic_event(struct qbman_swp *swp __attribute__((unused)),
++			       const struct qbman_fd *fd,
++			       const struct qbman_result *dq,
++			       struct dpaa2_queue *rxq,
++			       struct rte_event *ev)
+ {
+-	uint8_t dqrr_index = qbman_get_dqrr_idx(dq);
++	uint8_t dqrr_index;
+ 
+-	ev->mbuf = eth_fd_to_mbuf(fd);
++	rte_prefetch0((void *)(DPAA2_GET_FD_ADDR(fd) +
++		DPAA2_FD_PTA_SIZE + 16));
+ 
+ 	ev->flow_id = rxq->ev.flow_id;
+ 	ev->sub_event_type = rxq->ev.sub_event_type;
+@@ -733,6 +738,9 @@ void dpaa2_dev_process_atomic_event(struct qbman_swp *swp __attribute__((unused)
+ 	ev->queue_id = rxq->ev.queue_id;
+ 	ev->priority = rxq->ev.priority;
+ 
++	ev->mbuf = eth_fd_to_mbuf(fd);
++
++	dqrr_index = qbman_get_dqrr_idx(dq);
+ 	ev->mbuf->seqn = dqrr_index + 1;
+ 	DPAA2_PER_LCORE_DQRR_SIZE++;
+ 	DPAA2_PER_LCORE_DQRR_HELD |= 1 << dqrr_index;
+-- 
+2.14.3
+

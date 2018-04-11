@@ -1,0 +1,26 @@
+From 0e11e9295225020c169e3a97a29c46463e609afb Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 19 Jan 2018 12:03:16 +0530
+Subject: [PATCH 082/166] PVT: config: change dpaa2 mbuf headroom size to 128
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ config/defconfig_arm64-dpaa2-linuxapp-gcc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/config/defconfig_arm64-dpaa2-linuxapp-gcc b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+index 91f4993dc126..f8686c47c8f5 100644
+--- a/config/defconfig_arm64-dpaa2-linuxapp-gcc
++++ b/config/defconfig_arm64-dpaa2-linuxapp-gcc
+@@ -43,7 +43,7 @@ CONFIG_RTE_MAX_LCORE=16
+ CONFIG_RTE_MAX_NUMA_NODES=1
+ CONFIG_RTE_CACHE_LINE_SIZE=64
+ 
+-CONFIG_RTE_PKTMBUF_HEADROOM=256
++CONFIG_RTE_PKTMBUF_HEADROOM=128
+ 
+ # Doesn't support NUMA
+ CONFIG_RTE_EAL_NUMA_AWARE_HUGEPAGES=n
+-- 
+2.14.3
+

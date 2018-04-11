@@ -1,0 +1,37 @@
+From 5ca5e1b46ad7f12c3c5f69c56cdb0ba74c9bf2f7 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 19 Jan 2018 12:26:45 +0530
+Subject: [PATCH 083/166] PVT: net/dpaa2: fix the bpid offset
+
+Fixes: d2ef05d5c13e ("net/dpaa2: optimize Rx/Tx path")
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/net/dpaa2/dpaa2_rxtx.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/net/dpaa2/dpaa2_rxtx.c b/drivers/net/dpaa2/dpaa2_rxtx.c
+index 4c5e6a8549b6..41bd12f707a6 100644
+--- a/drivers/net/dpaa2/dpaa2_rxtx.c
++++ b/drivers/net/dpaa2/dpaa2_rxtx.c
+@@ -360,8 +360,8 @@ eth_mbuf_to_sg_fd(struct rte_mbuf *mbuf,
+ 
+ 	DPAA2_SET_FD_ADDR(fd, DPAA2_MBUF_VADDR_TO_IOVA(temp));
+ 	DPAA2_SET_FD_LEN(fd, mbuf->pkt_len);
++	DPAA2_SET_ONLY_FD_BPID(fd, bpid);
+ 	DPAA2_SET_FD_OFFSET(fd, temp->data_off);
+-	DPAA2_SET_FD_BPID(fd, bpid);
+ 	DPAA2_SET_FD_ASAL(fd, DPAA2_ASAL_VAL);
+ 	DPAA2_FD_SET_FORMAT(fd, qbman_fd_sg);
+ 	/*Set Scatter gather table and Scatter gather entries*/
+@@ -809,7 +809,6 @@ dpaa2_dev_tx(void *queue, struct rte_mbuf **bufs, uint16_t nb_pkts)
+ 				DPAA2_PER_LCORE_DQRR_HELD &= ~(1 << dqrr_index);
+ 				(*bufs)->seqn = DPAA2_INVALID_MBUF_SEQN;
+ 			}
+-			fd_arr[loop].simple.bpid_offset = 0;
+ 			fd_arr[loop].simple.frc = 0;
+ 			DPAA2_RESET_FD_CTRL((&fd_arr[loop]));
+ 			DPAA2_SET_FD_FLC((&fd_arr[loop]), NULL);
+-- 
+2.14.3
+

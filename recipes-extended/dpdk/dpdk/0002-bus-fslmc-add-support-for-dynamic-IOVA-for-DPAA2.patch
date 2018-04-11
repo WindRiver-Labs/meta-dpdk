@@ -1,0 +1,207 @@
+From 2b656aef0de9aec4fec0fdf56422fe743f0601d1 Mon Sep 17 00:00:00 2001
+From: Hemant Agrawal <hemant.agrawal@nxp.com>
+Date: Fri, 8 Dec 2017 10:51:16 +0530
+Subject: [PATCH 002/166] bus/fslmc: add support for dynamic IOVA for DPAA2
+
+This patch add support for dynamic iova detection for DPAA2
+devices and use of virtual address in such cases.
+
+Signed-off-by: Hemant Agrawal <hemant.agrawal@nxp.com>
+---
+ drivers/bus/fslmc/fslmc_bus.c               | 44 +++++++++++++++++++++++++++++
+ drivers/bus/fslmc/fslmc_vfio.c              |  5 +++-
+ drivers/bus/fslmc/portal/dpaa2_hw_pvt.h     | 15 ++++++++--
+ drivers/bus/fslmc/rte_bus_fslmc_version.map |  7 +++++
+ drivers/bus/fslmc/rte_fslmc.h               |  3 ++
+ drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c |  1 +
+ drivers/net/dpaa2/dpaa2_ethdev.c            |  1 +
+ 7 files changed, 73 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/bus/fslmc/fslmc_bus.c b/drivers/bus/fslmc/fslmc_bus.c
+index 480857e57c74..63c333a59dee 100644
+--- a/drivers/bus/fslmc/fslmc_bus.c
++++ b/drivers/bus/fslmc/fslmc_bus.c
+@@ -51,6 +51,7 @@
+ #define VFIO_IOMMU_GROUP_PATH "/sys/kernel/iommu_groups"
+ 
+ struct rte_fslmc_bus rte_fslmc_bus;
++uint8_t dpaa2_virt_mode;
+ 
+ static void
+ cleanup_fslmc_device_list(void)
+@@ -300,6 +301,9 @@ rte_fslmc_probe(void)
+ 		}
+ 	}
+ 
++	if (rte_eal_iova_mode() == RTE_IOVA_VA)
++		dpaa2_virt_mode = 1;
++
+ 	return 0;
+ }
+ 
+@@ -346,12 +350,52 @@ rte_fslmc_driver_unregister(struct rte_dpaa2_driver *driver)
+ 	driver->fslmc_bus = NULL;
+ }
+ 
++/*
++ * All device has iova as va
++ */
++static inline int
++fslmc_all_device_support_iova(void)
++{
++	int ret = 0;
++	struct rte_dpaa2_device *dev;
++	struct rte_dpaa2_driver *drv;
++
++	TAILQ_FOREACH(dev, &rte_fslmc_bus.device_list, next) {
++		TAILQ_FOREACH(drv, &rte_fslmc_bus.driver_list, next) {
++			ret = rte_fslmc_match(drv, dev);
++			if (ret)
++				continue;
++			/* if the driver is not supporting IOVA */
++			if (!(drv->drv_flags & RTE_DPAA2_DRV_IOVA_AS_VA))
++				return 0;
++		}
++	}
++	return 1;
++}
++
+ /*
+  * Get iommu class of DPAA2 devices on the bus.
+  */
+ static enum rte_iova_mode
+ rte_dpaa2_get_iommu_class(void)
+ {
++	bool is_vfio_noiommu_enabled = 1;
++	bool has_iova_va;
++
++	if (TAILQ_EMPTY(&rte_fslmc_bus.device_list))
++		return RTE_IOVA_DC;
++
++	/* check if all devices on the bus support Virtual addressing or not */
++	has_iova_va = fslmc_all_device_support_iova();
++
++#ifdef VFIO_PRESENT
++	is_vfio_noiommu_enabled = rte_vfio_noiommu_is_enabled() == true ?
++						true : false;
++#endif
++
++	if (has_iova_va && !is_vfio_noiommu_enabled)
++		return RTE_IOVA_VA;
++
+ 	return RTE_IOVA_PA;
+ }
+ 
+diff --git a/drivers/bus/fslmc/fslmc_vfio.c b/drivers/bus/fslmc/fslmc_vfio.c
+index a9363218ad25..02200eb497d0 100644
+--- a/drivers/bus/fslmc/fslmc_vfio.c
++++ b/drivers/bus/fslmc/fslmc_vfio.c
+@@ -249,7 +249,10 @@ int rte_fslmc_vfio_dmamap(void)
+ 		dma_map.size = memseg[i].len;
+ 		dma_map.vaddr = memseg[i].addr_64;
+ #ifdef RTE_LIBRTE_DPAA2_USE_PHYS_IOVA
+-		dma_map.iova = memseg[i].iova;
++		if (rte_eal_iova_mode() == RTE_IOVA_VA)
++			dma_map.iova = dma_map.vaddr;
++		else
++			dma_map.iova = memseg[i].iova;
+ #else
+ 		dma_map.iova = dma_map.vaddr;
+ #endif
+diff --git a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+index ece1a7d432ed..7937293ddd24 100644
+--- a/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
++++ b/drivers/bus/fslmc/portal/dpaa2_hw_pvt.h
+@@ -276,13 +276,19 @@ enum qbman_fd_format {
+ #define DPAA2_EQ_RESP_ALWAYS		1
+ 
+ #ifdef RTE_LIBRTE_DPAA2_USE_PHYS_IOVA
++extern uint8_t dpaa2_virt_mode;
+ static void *dpaa2_mem_ptov(phys_addr_t paddr) __attribute__((unused));
+ /* todo - this is costly, need to write a fast coversion routine */
+ static void *dpaa2_mem_ptov(phys_addr_t paddr)
+ {
+-	const struct rte_memseg *memseg = rte_eal_get_physmem_layout();
++	const struct rte_memseg *memseg;
+ 	int i;
+ 
++	if (dpaa2_virt_mode)
++		return (void *)paddr;
++
++	memseg = rte_eal_get_physmem_layout();
++
+ 	for (i = 0; i < RTE_MAX_MEMSEG && memseg[i].addr_64 != 0; i++) {
+ 		if (paddr >= memseg[i].iova &&
+ 		   (char *)paddr < (char *)memseg[i].iova + memseg[i].len)
+@@ -295,9 +301,14 @@ static void *dpaa2_mem_ptov(phys_addr_t paddr)
+ static phys_addr_t dpaa2_mem_vtop(uint64_t vaddr) __attribute__((unused));
+ static phys_addr_t dpaa2_mem_vtop(uint64_t vaddr)
+ {
+-	const struct rte_memseg *memseg = rte_eal_get_physmem_layout();
++	const struct rte_memseg *memseg;
+ 	int i;
+ 
++	if (dpaa2_virt_mode)
++		return vaddr;
++
++	memseg = rte_eal_get_physmem_layout();
++
+ 	for (i = 0; i < RTE_MAX_MEMSEG && memseg[i].addr_64 != 0; i++) {
+ 		if (vaddr >= memseg[i].addr_64 &&
+ 		    vaddr < memseg[i].addr_64 + memseg[i].len)
+diff --git a/drivers/bus/fslmc/rte_bus_fslmc_version.map b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+index 51a2ac69027a..a1e30d63d270 100644
+--- a/drivers/bus/fslmc/rte_bus_fslmc_version.map
++++ b/drivers/bus/fslmc/rte_bus_fslmc_version.map
+@@ -89,3 +89,10 @@ DPDK_17.11 {
+ 	rte_dpaa2_intr_enable;
+ 
+ } DPDK_17.08;
++
++DPDK_18.02 {
++	global:
++
++	dpaa2_virt_mode;
++
++} DPDK_17.11;
+diff --git a/drivers/bus/fslmc/rte_fslmc.h b/drivers/bus/fslmc/rte_fslmc.h
+index 0814e69b849f..0c7872d9c71f 100644
+--- a/drivers/bus/fslmc/rte_fslmc.h
++++ b/drivers/bus/fslmc/rte_fslmc.h
+@@ -62,6 +62,9 @@ extern "C" {
+ 
+ #define FSLMC_OBJECT_MAX_LEN 32   /**< Length of each device on bus */
+ 
++/** Device driver supports IOVA as VA */
++#define RTE_DPAA2_DRV_IOVA_AS_VA 0X0040
++
+ struct rte_dpaa2_driver;
+ 
+ /* DPAA2 Device and Driver lists for FSLMC bus */
+diff --git a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+index 67fb6e24c784..999e7d831bf4 100644
+--- a/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
++++ b/drivers/crypto/dpaa2_sec/dpaa2_sec_dpseci.c
+@@ -2420,6 +2420,7 @@ cryptodev_dpaa2_sec_remove(struct rte_dpaa2_device *dpaa2_dev)
+ }
+ 
+ static struct rte_dpaa2_driver rte_dpaa2_sec_driver = {
++	.drv_flags = RTE_DPAA2_DRV_IOVA_AS_VA,
+ 	.drv_type = DPAA2_CRYPTO,
+ 	.driver = {
+ 		.name = "DPAA2 SEC PMD"
+diff --git a/drivers/net/dpaa2/dpaa2_ethdev.c b/drivers/net/dpaa2/dpaa2_ethdev.c
+index 202f84f0a5fa..38de3d92469e 100644
+--- a/drivers/net/dpaa2/dpaa2_ethdev.c
++++ b/drivers/net/dpaa2/dpaa2_ethdev.c
+@@ -2003,6 +2003,7 @@ rte_dpaa2_remove(struct rte_dpaa2_device *dpaa2_dev)
+ }
+ 
+ static struct rte_dpaa2_driver rte_dpaa2_pmd = {
++	.drv_flags = RTE_DPAA2_DRV_IOVA_AS_VA,
+ 	.drv_type = DPAA2_ETH,
+ 	.probe = rte_dpaa2_probe,
+ 	.remove = rte_dpaa2_remove,
+-- 
+2.14.3
+
