@@ -57,7 +57,7 @@ export ICP_LAC_API_DIR = "${STAGING_DIR_TARGET}${includedir}/lac"
 def get_dpdk_target_mach(bb, d):
     target_arch = d.getVar('DPDK_TARGET_MACHINE', True)
     if target_arch:
-            target_arch
+            return target_arch
     return "default"
 
 do_configure () {
