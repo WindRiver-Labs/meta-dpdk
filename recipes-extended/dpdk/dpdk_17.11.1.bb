@@ -1,5 +1,7 @@
 include dpdk.inc
 
+DEFAULT_PREFERENCE = "-1"
+
 SRC_URI[dpdk.md5sum] = "75a2f0922baadc19dc8a222a7547798a"
 SRC_URI[dpdk.sha256sum] = "47f43a3ef66cc351ab639ae313830dc08760089c7d227e5f73daa0d6df38b201"
 
@@ -186,3 +188,10 @@ LICENSE = "BSD & LGPLv2 & GPLv2"
 LIC_FILES_CHKSUM = "file://license/gpl-2.0.txt;md5=b234ee4d69f5fce4486a80fdaf4a4263 \
                     file://license/lgpl-2.1.txt;md5=4b54a1fd55a448865a0b32d41598759d \
                     file://license/bsd-3-clause.txt;md5=0f00d99239d922ffd13cabef83b33444"
+
+python do_fetch_prepend () {
+    supported_machines = ["nxp-ls20xx"]
+    machine = d.getVar('MACHINE')
+    if machine not in supported_machines:
+        bb.fatal("Sorry, this version of DPDK is only supposed to run on machine: %s" % supported_machines)
+}
