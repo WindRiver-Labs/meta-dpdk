@@ -4,6 +4,7 @@ LICENSE = "BSD & LGPLv2 & GPLv2"
 LIC_FILES_CHKSUM = "file://LICENSE.GPL;md5=751419260aa954499f7abaabaa882bbe"
 
 SRC_URI += "\
+	    file://dpdk-16.04-dpdk-fix-compilation-with-dynamic-libs.patch \
             file://dpdk-16.04-dpdk-enable-ip_fragmentation-in-common_base-config.patch \
             file://0001-examples-Fix-maybe-uninitialized-warning.patch \
             "
