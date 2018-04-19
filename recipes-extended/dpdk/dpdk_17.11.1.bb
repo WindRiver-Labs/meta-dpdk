@@ -195,3 +195,14 @@ python do_fetch_prepend () {
     if machine not in supported_machines:
         bb.fatal("Sorry, this version of DPDK is only supposed to run on machine: %s" % supported_machines)
 }
+
+do_install_append () {
+    if [ "${DPDK_TARGET_MACH}" = "dpaa2" ]; then
+        install -d ${D}/${INSTALL_PATH}/dpdk/
+        install -m 0755 ./nxp/dpaa2/*.sh ${D}/${INSTALL_PATH}/dpdk/
+    fi
+}
+
+FILES_${PN} += " \
+	${INSTALL_PATH}/dpdk/*.sh \
+	"
