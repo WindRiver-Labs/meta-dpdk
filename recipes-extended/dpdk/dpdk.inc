@@ -51,7 +51,7 @@ export DPDK_TARGET_MACH = "${@get_dpdk_target_mach(bb,d)}"
 export ICP_LAC_API_DIR = "${STAGING_DIR_TARGET}${includedir}/lac"
 
 DPDK_RTE_TARGET_x86-64 = "x86_64-native-linuxapp-gcc"
-DPDK_RTE_TARGET_i686 = "i686-native-linuxapp-gcc"
+DPDK_RTE_TARGET_x86 = "i686-native-linuxapp-gcc"
 DPDK_RTE_TARGET_aarch64 = "arm64-${DPDK_TARGET_MACH}-linuxapp-gcc"
 export RTE_TARGET = "${DPDK_RTE_TARGET}"
 
