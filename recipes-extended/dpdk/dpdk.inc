@@ -50,10 +50,10 @@ export SYSROOTPATH = "--sysroot=${STAGING_DIR_HOST}"
 export DPDK_TARGET_MACH = "${@get_dpdk_target_mach(bb,d)}"
 export ICP_LAC_API_DIR = "${STAGING_DIR_TARGET}${includedir}/lac"
 
-RTE_TARGET_x86-64 = "x86_64-native-linuxapp-gcc"
-RTE_TARGET_i686 = "i686-native-linuxapp-gcc"
-RTE_TARGET_aarch64 = "arm64-${DPDK_TARGET_MACH}-linuxapp-gcc"
-export RTE_TARGET="${RTE_TARGET}"
+DPDK_RTE_TARGET_x86-64 = "x86_64-native-linuxapp-gcc"
+DPDK_RTE_TARGET_i686 = "i686-native-linuxapp-gcc"
+DPDK_RTE_TARGET_aarch64 = "arm64-${DPDK_TARGET_MACH}-linuxapp-gcc"
+export RTE_TARGET = "${DPDK_RTE_TARGET}"
 
 # The list of intel Comms platforms and their target machine
 # process mapping. The supported target machine is listed under
