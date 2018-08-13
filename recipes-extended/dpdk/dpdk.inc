@@ -10,6 +10,7 @@ SRC_URI = "git://dpdk.org/dpdk${STABLE};branch=${BRANCH} \
 	   file://dpdk-16.07-add-sysroot-option-within-app-makefile.patch \
 	   file://dpdk-16.07-dpdk-fix-for-parellel-make-issue.patch \
 	   file://dpdk-17.02-dpdk-fix-installation-warning-and-issue.patch \
+	   file://dpdk-17.11-Fix-strncpy-error-for-GCC8.patch \
 	  "
 
 COMPATIBLE_MACHINE = "null"
