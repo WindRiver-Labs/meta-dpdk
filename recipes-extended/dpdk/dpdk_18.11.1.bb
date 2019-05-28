@@ -13,3 +13,12 @@ do_install_append () {
     # Remove the unneeded dir
     rm -rf ${D}/${INSTALL_PATH}/${RTE_TARGET}/app
 }
+
+DEFAULT_PREFERENCE = "-1"
+
+python do_fetch_prepend () {
+    supported_machines = ["marvell-cn91xx"]
+    machine = d.getVar('MACHINE')
+    if machine not in supported_machines:
+        bb.fatal("Sorry, this version of DPDK is only supposed to run on machine: %s" % supported_machines)
+}
