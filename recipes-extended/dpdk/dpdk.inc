@@ -61,6 +61,9 @@ DPDK_RTE_TARGET_x86-64 = "x86_64-native-linuxapp-gcc"
 DPDK_RTE_TARGET_x86 = "i686-native-linuxapp-gcc"
 DPDK_RTE_TARGET_aarch64 = "arm64-${DPDK_TARGET_MACH}-linuxapp-gcc"
 export RTE_TARGET = "${DPDK_RTE_TARGET}"
+DPDK_EXTRA_CFLAGS = ""
+DPDK_EXTRA_CFLAGS_qemux86 ?= "-march=corei7"
+DPDK_EXTRA_CFLAGS_qemux86-64 ?= "-march=corei7"
 
 # The list of intel Comms platforms and their target machine
 # process mapping. The supported target machine is listed under
@@ -100,18 +103,18 @@ do_compile () {
 
 	cd ${S}/${RTE_TARGET}
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" \
 		   prefix=""  LDFLAGS="${TUNE_LDARGS}"  WERROR_FLAGS="-w" V=1
 
 	cd ${S}/examples/
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu -fuse-ld=bfd" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" O="${S}/examples/$@/"
 
 	cd ${S}/test/
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu -fuse-ld=bfd" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" O="${S}/test/$@/"
 }
 
