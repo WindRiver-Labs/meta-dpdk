@@ -11,6 +11,7 @@ LIC_FILES_CHKSUM = "file://LICENSE.GPL;md5=751419260aa954499f7abaabaa882bbe\
 SRC_URI += "\
         file://dpdk-16.07-dpdk-fix-for-parellel-make-issue.patch \
         file://dpdk-17.11-mk-disable-warning-for-packed-member-pointer.patch \
+        file://dpdk-17.11-igb_uio-fix-build-on-Linux-5.3-for-fall-through.patch \
 "
 
 do_install_append () {

@@ -1,0 +1,81 @@
+From c0307019689d5f8b4d5ca7d92a5585c94088afeb Mon Sep 17 00:00:00 2001
+From: Ferruh Yigit <ferruh.yigit@intel.com>
+Date: Mon, 29 Jul 2019 13:32:16 +0100
+Subject: [PATCH] igb_uio: fix build on Linux 5.3 for fall through
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+build error:
+kernel/linux/igb_uio/igb_uio.c:
+   In function ‘igbuio_pci_enable_interrupts’:
+   kernel/linux/igb_uio/igb_uio.c:230:6:
+   error: this statement may fall through
+   [-Werror=implicit-fallthrough=]
+  230 |   if (pci_alloc_irq_vectors(udev->pdev, 1, 1, ....
+kernel/linux/igb_uio/igb_uio.c:240:2: note: here
+  240 |  case RTE_INTR_MODE_MSI:
+      |  ^~~~
+
+The build error is caused by Linux kernel commit in 5.3 that enables the
+"-Wimplicit-fallthrough=3" gcc flag.
+Commit a035d552a93b ("Makefile: Globally enable fall-through warning")
+
+To fix the error, either a gcc attribute can be provided [1] or a code
+comment with some defined syntax need to be provided [2], since there is
+already comments, updated them slightly to match the required syntax to
+fix the build error.
+
+[1]
+"__attribute__ ((fallthrough));"
+
+[2]
+[ \t.!]*([Ee]lse,? |[Ii]ntentional(ly)? )?
+fall(s | |-)?thr(ough|u)[ \t.!]*(-[^\n\r]*)?
+
+Cc: stable@dpdk.org
+
+Signed-off-by: Ferruh Yigit <ferruh.yigit@intel.com>
+
+Upstream-Status: Backport[c96bbbd010f7abb88c2ca2ed9dfc5ecd37e9027d]
+Adjust code context
+
+Signed-off-by: He Zhe <zhe.he@windriver.com>
+---
+ lib/librte_eal/linuxapp/igb_uio/igb_uio.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/lib/librte_eal/linuxapp/igb_uio/igb_uio.c b/lib/librte_eal/linuxapp/igb_uio/igb_uio.c
+index 45d7027..3073bca 100644
+--- a/lib/librte_eal/linuxapp/igb_uio/igb_uio.c
++++ b/lib/librte_eal/linuxapp/igb_uio/igb_uio.c
+@@ -254,7 +254,7 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ 		}
+ #endif
+ 
+-	/* fall back to MSI */
++	/* falls through - to MSI */
+ 	case RTE_INTR_MODE_MSI:
+ #ifndef HAVE_ALLOC_IRQ_VECTORS
+ 		if (pci_enable_msi(udev->pdev) == 0) {
+@@ -273,7 +273,7 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ 			break;
+ 		}
+ #endif
+-	/* fall back to INTX */
++	/* falls through - to INTX */
+ 	case RTE_INTR_MODE_LEGACY:
+ 		if (pci_intx_mask_supported(udev->pdev)) {
+ 			dev_dbg(&udev->pdev->dev, "using INTX");
+@@ -283,7 +283,7 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ 			break;
+ 		}
+ 		dev_notice(&udev->pdev->dev, "PCI INTX mask not supported\n");
+-	/* fall back to no IRQ */
++	/* falls through - to no IRQ */
+ 	case RTE_INTR_MODE_NONE:
+ 		udev->mode = RTE_INTR_MODE_NONE;
+ 		udev->info.irq = UIO_IRQ_NONE;
+-- 
+2.7.4
+
