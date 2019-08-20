@@ -17,7 +17,7 @@ do_install_append () {
 DEFAULT_PREFERENCE = "-1"
 
 python do_fetch_prepend () {
-    supported_machines = ["marvell-cn91xx"]
+    supported_machines = ["marvell-cn91xx", "marvell-cn96xx"]
     machine = d.getVar('MACHINE')
     if machine not in supported_machines:
         bb.fatal("Sorry, this version of DPDK is only supposed to run on machine: %s" % supported_machines)
