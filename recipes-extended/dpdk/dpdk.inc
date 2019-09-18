@@ -1,11 +1,6 @@
 DESCRIPTION = "Intel(r) Data Plane Development Kit"
 HOMEPAGE = "http://dpdk.org"
 
-python () {
-    if not bb.utils.contains('KERNEL_FEATURES', 'features/intel-dpdk/intel-dpdk.scc', True, False, d):
-        raise bb.parse.SkipPackage("dpdk requires features/intel-dpdk/intel-dpdk.scc in KERNEL_FEATURES to build")
-}
-
 STABLE = ""
 BRANCH = "master"
 S = "${WORKDIR}/git"
