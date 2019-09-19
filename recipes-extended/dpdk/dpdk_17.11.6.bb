@@ -13,6 +13,10 @@ SRC_URI += "\
         file://dpdk-17.11-mk-disable-warning-for-packed-member-pointer.patch \
         file://dpdk-17.11-igb_uio-fix-build-on-Linux-5.3-for-fall-through.patch \
 "
+SRC_URI += "${@bb.utils.contains('PREFERRED_PROVIDER_virtual/kernel',\
+            'linux-yocto-rt',\
+            'file://dpdk-17.11-igb_uio-change-ISR-to-be-threaded-when-using-with-RT.patch',\
+            '',d)}"
 
 do_install_append () {
         # Remove the unneeded dir

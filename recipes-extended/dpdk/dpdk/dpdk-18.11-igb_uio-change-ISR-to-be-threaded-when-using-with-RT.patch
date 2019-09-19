@@ -1,0 +1,85 @@
+From 4f335c926ffb87749f8b1ae465445c3cf2a74128 Mon Sep 17 00:00:00 2001
+From: Yongxin Liu <yongxin.liu@windriver.com>
+Date: Wed, 18 Sep 2019 17:11:09 +0800
+Subject: [PATCH] igb_uio: change ISR to be threaded when using with RT kernel
+
+Non-thread ISR shouldn't call rt_spin_lock which might sleep.
+
+Here is the calltrace.
+
+[ 2543.830170] Call Trace:
+[ 2543.833179]  <IRQ>
+[ 2543.835757]  dump_stack+0x70/0x9a
+[ 2543.839638]  ___might_sleep.cold+0xe1/0xf2
+[ 2543.844300]  rt_spin_lock+0x55/0x70
+[ 2543.848353]  ? __wake_up_common_lock+0x61/0xb0
+[ 2543.853361]  __wake_up_common_lock+0x61/0xb0
+[ 2543.858200]  __wake_up+0x13/0x20
+[ 2543.861993]  uio_event_notify+0x2c/0x50 [uio]
+[ 2543.866916]  igbuio_pci_irqhandler+0x1f/0x40 [igb_uio]
+[ 2543.872620]  __handle_irq_event_percpu+0x5f/0x3f0
+[ 2543.877888]  ? __lock_release.isra.0+0x1aa/0x310
+[ 2543.883071]  ? debug_smp_processor_id+0x21/0x110
+[ 2543.888253]  handle_irq_event_percpu+0x4b/0x90
+[ 2543.893262]  handle_irq_event+0x3c/0x5b
+[ 2543.897663]  handle_edge_irq+0xbb/0x210
+[ 2543.902063]  handle_irq+0x23/0x30
+[ 2543.905944]  do_IRQ+0x7e/0x150
+[ 2543.909564]  common_interrupt+0xf/0xf
+[ 2543.913791]  </IRQ>
+
+Upstream-Status: Inappropriate
+
+Signed-off-by: Yongxin Liu <yongxin.liu@windriver.com>
+---
+ kernel/linux/igb_uio/igb_uio.c | 6 +-----
+ 1 file changed, 1 insertion(+), 5 deletions(-)
+
+diff --git a/kernel/linux/igb_uio/igb_uio.c b/kernel/linux/igb_uio/igb_uio.c
+index 039f5a5f6..9d7380fb7 100644
+--- a/kernel/linux/igb_uio/igb_uio.c
++++ b/kernel/linux/igb_uio/igb_uio.c
+@@ -221,7 +221,6 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ 		msix_entry.entry = 0;
+ 		if (pci_enable_msix(udev->pdev, &msix_entry, 1) == 0) {
+ 			dev_dbg(&udev->pdev->dev, "using MSI-X");
+-			udev->info.irq_flags = IRQF_NO_THREAD;
+ 			udev->info.irq = msix_entry.vector;
+ 			udev->mode = RTE_INTR_MODE_MSIX;
+ 			break;
+@@ -229,7 +228,6 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ #else
+ 		if (pci_alloc_irq_vectors(udev->pdev, 1, 1, PCI_IRQ_MSIX) == 1) {
+ 			dev_dbg(&udev->pdev->dev, "using MSI-X");
+-			udev->info.irq_flags = IRQF_NO_THREAD;
+ 			udev->info.irq = pci_irq_vector(udev->pdev, 0);
+ 			udev->mode = RTE_INTR_MODE_MSIX;
+ 			break;
+@@ -241,7 +239,6 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ #ifndef HAVE_ALLOC_IRQ_VECTORS
+ 		if (pci_enable_msi(udev->pdev) == 0) {
+ 			dev_dbg(&udev->pdev->dev, "using MSI");
+-			udev->info.irq_flags = IRQF_NO_THREAD;
+ 			udev->info.irq = udev->pdev->irq;
+ 			udev->mode = RTE_INTR_MODE_MSI;
+ 			break;
+@@ -249,7 +246,6 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ #else
+ 		if (pci_alloc_irq_vectors(udev->pdev, 1, 1, PCI_IRQ_MSI) == 1) {
+ 			dev_dbg(&udev->pdev->dev, "using MSI");
+-			udev->info.irq_flags = IRQF_NO_THREAD;
+ 			udev->info.irq = pci_irq_vector(udev->pdev, 0);
+ 			udev->mode = RTE_INTR_MODE_MSI;
+ 			break;
+@@ -259,7 +255,7 @@ igbuio_pci_enable_interrupts(struct rte_uio_pci_dev *udev)
+ 	case RTE_INTR_MODE_LEGACY:
+ 		if (pci_intx_mask_supported(udev->pdev)) {
+ 			dev_dbg(&udev->pdev->dev, "using INTX");
+-			udev->info.irq_flags = IRQF_SHARED | IRQF_NO_THREAD;
++			udev->info.irq_flags = IRQF_SHARED;
+ 			udev->info.irq = udev->pdev->irq;
+ 			udev->mode = RTE_INTR_MODE_LEGACY;
+ 			break;
+-- 
+2.14.4
+
