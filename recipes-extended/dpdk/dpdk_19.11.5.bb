@@ -6,6 +6,10 @@ SRC_URI += " \
             file://0001-Starting-from-Linux-5.9-get_user_pages_remote-API-do.patch \
             file://usertools-devbind-fix-binding-for-built-in-kernel-dr.patch"
 
+SRC_URI += "${@bb.utils.contains('PREFERRED_PROVIDER_virtual/kernel',\
+            'linux-yocto-rt',\
+            'file://dpdk-19.11-igb_uio-change-ISR-to-be-threaded-when-using-with-RT.patch',\
+            '',d)}"
 
 STABLE = "-stable"
 BRANCH = "19.11"
