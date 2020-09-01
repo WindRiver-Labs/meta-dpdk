@@ -202,3 +202,6 @@ FILES_${PN}-examples += " \
 FILES_${PN}-test += " \
 	${INSTALL_PATH}/test \
 	"
+
+# Fix build failure for gcc-10
+DPDK_EXTRA_CFLAGS_append = " -fcommon"
