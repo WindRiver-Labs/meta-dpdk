@@ -16,6 +16,10 @@ COMPATIBLE_MACHINE = "null"
 COMPATIBLE_HOST_libc-musl_class-target = "null"
 COMPATIBLE_HOST_linux-gnux32 = "null"
 
+DPDK_EXTRA_CFLAGS = ""
+DPDK_EXTRA_CFLAGS_qemux86 ?= "-march=corei7"
+DPDK_EXTRA_CFLAGS_qemux86-64 ?= "-march=corei7"
+
 # dpdk example apps dpdk_qat and vhost have dependancy on fuse and qat.
 # fuse is in meta-filesystems and qat is not yet upstreamed.
 # So adding mechanism to explicitly disable the use of fuse and qat.
@@ -108,18 +112,18 @@ do_compile () {
 
 	cd ${S}/${RTE_TARGET}
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" \
 		   prefix=""  LDFLAGS="${TUNE_LDARGS}"  WERROR_FLAGS="-w" V=1
 
 	cd ${S}/examples/
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu -fuse-ld=bfd" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" O="${S}/examples/$@/"
 
 	cd ${S}/${TEST_DIR}/
 	oe_runmake EXTRA_LDFLAGS="-L${STAGING_LIBDIR} --hash-style=gnu -fuse-ld=bfd" \
-		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 -I${STAGING_INCDIR}" \
+		   EXTRA_CFLAGS="${HOST_CC_ARCH} ${TOOLCHAIN_OPTIONS} -O3 ${DPDK_EXTRA_CFLAGS} -I${STAGING_INCDIR}" \
 		   CROSS="${TARGET_PREFIX}" O="${S}/${TEST_DIR}/$@/"
 }
 
