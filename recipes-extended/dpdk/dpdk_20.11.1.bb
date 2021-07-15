@@ -14,10 +14,6 @@ EXTRA_OEMESON = " -Denable_kmods=false \
                 -Dexamples=all \
 "
 
-COMPATIBLE_MACHINE = "null"
-COMPATIBLE_HOST_libc-musl_class-target = "null"
-COMPATIBLE_HOST_linux-gnux32 = "null"
-
 PACKAGECONFIG ??= " "
 PACKAGECONFIG[afxdp] = ",,libbpf"
 PACKAGECONFIG[libvirt] = ",,libvirt"

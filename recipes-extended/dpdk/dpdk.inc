@@ -9,3 +9,7 @@ LIC_FILES_CHKSUM = "file://license/gpl-2.0.txt;md5=b234ee4d69f5fce4486a80fdaf4a4
 SRC_URI = "git://dpdk.org/dpdk${STABLE};branch=${BRANCH} \
 "
 CVE_PRODUCT = "data_plane_development_kit"
+
+COMPATIBLE_MACHINE = "null"
+COMPATIBLE_HOST_libc-musl_class-target = "null"
+COMPATIBLE_HOST_linux-gnux32 = "null"
