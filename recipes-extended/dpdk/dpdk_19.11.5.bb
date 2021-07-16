@@ -16,6 +16,10 @@ BRANCH = "19.11"
 SRCREV = "1d28832feb881d4512993791d30d695cc9c7160b"
 S = "${WORKDIR}/git"
 
+COMPATIBLE_MACHINE = "null"
+COMPATIBLE_HOST_libc-musl_class-target = "null"
+COMPATIBLE_HOST_linux-gnux32 = "null"
+
 DPDK_EXTRA_CFLAGS = ""
 DPDK_EXTRA_CFLAGS_qemux86 ?= "-march=corei7"
 DPDK_EXTRA_CFLAGS_qemux86-64 ?= "-march=corei7"
