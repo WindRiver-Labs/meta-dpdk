@@ -43,6 +43,9 @@ do_install_append(){
         fi
     done
 
+    # There is a ${RECIPE_SYSROOT}/usr/lib64/../lib64/librt.so in Libs.private
+    # which should be -lrt.
+    sed -i 's#${RECIPE_SYSROOT}[^ ]*/librt.so#-lrt#' ${D}/${libdir}/pkgconfig/libdpdk.pc
 }
 
 PACKAGES =+ "${PN}-examples ${PN}-tools"
